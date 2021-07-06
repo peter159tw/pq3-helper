@@ -9,8 +9,6 @@ from PyQt5.QtGui import QPixmap
 from PyQt5 import QtCore
 
 
-
-
 class DeviceController(QObject):
   # not thread-safe
 
@@ -23,8 +21,10 @@ class DeviceController(QObject):
     minicap_client: MinicapClient = MinicapClient()
 
     def capture_screenshot(self):
-        self.last_captured_screenshot = cv2.imdecode(np.array(self.minicap_client.get_last_frame()), cv2.IMREAD_UNCHANGED)
-        cv2.imwrite(self.last_captured_screenshot_path, self.last_captured_screenshot)
+        self.last_captured_screenshot = cv2.imdecode(
+            np.array(self.minicap_client.get_last_frame()), cv2.IMREAD_UNCHANGED)
+        cv2.imwrite(self.last_captured_screenshot_path,
+                    self.last_captured_screenshot)
         self.update_screenshot.emit()
 
     def tap(self, pos_x, pos_y):

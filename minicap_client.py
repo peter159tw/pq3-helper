@@ -1,6 +1,7 @@
 import socket
 import threading
 import cv2
+import subprocess
 
 from PyQt5.QtCore import QRunnable
 
@@ -43,13 +44,23 @@ class MinicapClient(QRunnable):
     __last_frame_lock = threading.Lock()
 
     def run(self):
-        self.__connection = socket.create_connection(('127.0.0.1', 1313))
+        try:
+            self.__connection = socket.create_connection(('127.0.0.1', 1313))
+        except ConnectionRefusedError:
+            self.__start_minicap()
+            raise
+        
 
         for frame in read_frames(self.__connection):
             self.__set_last_frame(frame)
 
         self.__connection.shutdown(socket.SHUT_RDWR)
         self.__connection.close()
+
+    def __start_minicap(self):
+        print("run following commands manually, and keep it alive:")
+        print("adb shell LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/minicap -P 2340x1080@2340x1080/0")
+        print("adb forward tcp:1313 localabstract:minicap")
 
     def __set_last_frame(self, frame):
         with self.__last_frame_lock:

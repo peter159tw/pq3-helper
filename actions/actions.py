@@ -1,10 +1,12 @@
 import threading
 import copy
 import time
+from typing import Tuple
 import device_controller
 import numpy
 import cv2
 import random
+from enum import Enum
 from .find_images import ImageFindingSpec, find_image
 from .base_action import BaseAction, ActionRunningContext, ImageFindResult
 from collections import deque
@@ -34,100 +36,148 @@ class ActionCaptureScreenshot(BaseAction):
         context.image_find_results.clear()
 
 
-class ActionFindImages(BaseAction):
-    specs: list[ImageFindingSpec]
+class ActionClickPosition(BaseAction):
+    pos_x: int
+    pos_y: int
 
-    def __init__(self, specs):
+    def run(self, context: ActionRunningContext):
+        context.device.tap(self.pos_x, self.pos_y)
+
+
+class ActionRetreat(BaseAction):
+    def run(self, context: ActionRunningContext):
+        context.logger.log("Retreating")
+        context.device.tap(200, 54)
+        time.sleep(5)
+        context.device.tap(1950, 54)
+        time.sleep(5)
+        context.device.tap(1418, 778)
+        time.sleep(5)
+
+
+class ActionClickSpells(BaseAction):
+    def run(self, context: ActionRunningContext):
+        context.logger.log("Clicking skills")
+
+        skills = []
+        skills.append((818, 976))
+        skills.append((984, 976))
+        skills.append((1359, 976))
+        skills.append((1516, 976))
+
+        # random.shuffle(skills)
+        for skill in skills:
+            context.device.tap(skill[0], skill[1])
+
+
+class GameState(Enum):
+    UNKNOWN = 1
+    CHOOSE_PVP = 2
+    ENTER_PVP = 3
+    IN_BATTLE = 4
+    BATTLE_RESULT = 5
+
+
+class SkillsState(Enum):
+    UNKNOWN = 1
+    ALL_INACTIVE = 2
+    OTHERWISE = 3
+
+
+class ActionDecideAction(BaseAction):
+    __always_check_specs: list[str]
+
+    __game_state: GameState = None
+    __skills_state: SkillsState = SkillsState.UNKNOWN
+
+    __actions: list[BaseAction] = None
+
+    def __init__(self):
         super().__init__()
-        self.specs = specs
-
-    def get_arguments(self) -> list[str]:
-        spec_targets = []
-        for spec in self.specs:
-            spec_targets.append(spec.target)
-        return ["specs: {0}".format(','.join(spec_targets))]
+        self.__always_check_specs = ["enter_open_pvp",
+                                     "enter_pvp_battle",
+                                     "exit_battle_result",
+                                     "battle_waiting_action",
+                                     "all_skills_inactive",
+                                     ]
 
     def run(self, context: ActionRunningContext):
         context.image_find_results = dict()
-        for spec in self.specs:
-            context.image_find_results[spec.target] = find_image(
+        for spec in self.__always_check_specs:
+            context.image_find_results[spec] = find_image(
                 spec, context.device.last_captured_screenshot, context.logger)
 
+        self.__decide(context)
+        self.__log_state(context)
+        return self.__actions
 
-class ActionClickFoundPosition(BaseAction):
-    def run(self, context: ActionRunningContext):
-        if not context.image_find_results:
+    def __decide(self, context: ActionRunningContext):
+        specs = ["enter_open_pvp",
+                 "enter_pvp_battle",
+                 "exit_battle_result",
+                 "battle_waiting_action"
+                 ]
+
+        self.__game_state = GameState.UNKNOWN
+        self.__skills_state = SkillsState.UNKNOWN
+        self.__find_specs(specs, context)
+
+        found_spec = None
+        for spec in specs:
+            result = context.image_find_results[spec]
+            if result.found:
+                if found_spec is not None:
+                    context.logger.log("WARNING: cannot determine game state strongly. should be one-of")
+                found_spec = spec
+        
+        if found_spec is None:
             return
 
-        if context.image_find_results["battle_waiting_action"].pos_x and context.image_find_results["all_skills_inactive"].pos_x:
-            context.logger.log("Retreating")
-            context.device.tap(200, 54)
-            time.sleep(5)
-            context.device.tap(1950, 54)
-            time.sleep(5)
-            context.device.tap(1418, 778)
-            time.sleep(5)
-            return
+        result = context.image_find_results[found_spec]
+        if found_spec == "enter_open_pvp" and result.found:
+            self.__game_state = GameState.CHOOSE_PVP
+            self.__generate_action_to_click_center_target(result)
 
-        for (spec_name, spec_result) in context.image_find_results.items():
-            if not spec_result.pos_x:
-                continue
+        if found_spec == "enter_pvp_battle" and result.found:
+            self.__game_state = GameState.ENTER_PVP
+            self.__generate_action_to_click_center_target(result)
 
-            if spec_name == "enter_open_pvp" or spec_name == "enter_pvp_battle" or spec_name == "exit_battle_result":
-                context.logger.log(
-                    "Clicking spec '{0}'. pos: {1},{2}".format(spec_name, spec_result.pos_x, spec_result.pos_y))
-                context.device.tap(spec_result.pos_x, spec_result.pos_y)
-            elif spec_name == "battle_waiting_action":
-                context.logger.log("Clicking skills")
+        if found_spec == "battle_waiting_action" and result.found:
+            self.__game_state = GameState.IN_BATTLE
+            self.__decide_in_battle_action(context)
 
-                skills = []
-                skills.append((818, 976))
-                skills.append((984, 976))
-                skills.append((1359, 976))
-                skills.append((1516, 976))
+        if found_spec == "exit_battle_result" and result.found:
+            self.__game_state = GameState.BATTLE_RESULT
+            self.__generate_action_to_click_center_target(result)
 
-                # random.shuffle(skills)
-                for skill in skills:
-                    context.device.tap(skill[0], skill[1])
-            else:
-                context.logger.log("no action for spec: " + spec_name)
+    def __decide_in_battle_action(self, context: ActionRunningContext):
+        spec = "all_skills_inactive"
+        self.__find_specs([spec], context)
+        if context.image_find_results[spec].found:
+            self.__skills_state = SkillsState.ALL_INACTIVE
+            self.__actions = [ActionRetreat()]
+        else:
+            self.__skills_state = SkillsState.OTHERWISE
+            self.__actions = [ActionClickSpells()]
+
+    def __find_specs(self, specs, context: ActionRunningContext):
+        for spec in specs:
+            context.image_find_results[spec] = find_image(
+                spec, context.device.last_captured_screenshot, context.logger)
+
+    def __generate_action_to_click_center_target(self, find_result: ImageFindResult):
+        action = ActionClickPosition()
+        action.pos_x = find_result.pos_x + find_result.target_w/2
+        action.pos_y = find_result.pos_y + find_result.target_h/2
+        self.__actions = [action]
+    
+    def __log_state(self, context: ActionRunningContext):
+        context.logger.log("game state: {} skill state: {}".format(self.__game_state, self.__skills_state))
 
 
 class RootAction(BaseAction):
     def run(self, context: ActionRunningContext) -> list[BaseAction]:
-        enter_open_pvp_spec = ImageFindingSpec()
-        enter_open_pvp_spec.target = "enter_open_pvp"
-        enter_open_pvp_spec.threshold = 0.04
-        enter_open_pvp_spec.expect_pos_x = 1279
-        enter_open_pvp_spec.expect_pos_y = 141
-
-        enter_pvp_battle = ImageFindingSpec()
-        enter_pvp_battle.target = "enter_pvp_battle"
-        enter_pvp_battle.threshold = 0.06
-        enter_pvp_battle.expect_pos_x = 1881
-        enter_pvp_battle.expect_pos_y = 974
-
-        exit_battle_result = ImageFindingSpec()
-        exit_battle_result.target = "exit_battle_result"
-        exit_battle_result.threshold = 0.1
-        exit_battle_result.expect_pos_x = 1880
-        exit_battle_result.expect_pos_y = 971
-
-        battle_waiting_action = ImageFindingSpec()
-        battle_waiting_action.target = "battle_waiting_action"
-        battle_waiting_action.threshold = 0.04
-        battle_waiting_action.expect_pos_x = 775
-        battle_waiting_action.expect_pos_y = 133
-
-        all_skills_inactive = ImageFindingSpec()
-        all_skills_inactive.target = "all_skills_inactive"
-        all_skills_inactive.threshold = 0.04
-        all_skills_inactive.expect_pos_x = 760
-        all_skills_inactive.expect_pos_y = 928
-
         return [
             ActionCaptureScreenshot(),
-            ActionFindImages([enter_open_pvp_spec, enter_pvp_battle,
-                             exit_battle_result, battle_waiting_action, all_skills_inactive]),
-            ActionClickFoundPosition()
+            ActionDecideAction()
         ]

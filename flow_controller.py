@@ -60,6 +60,7 @@ class FlowController(QObject):
             self.__action_context.device = self.device
             self.__action_context.logger = self.logger
             if next_action:
+                self.logger.log("Running action: {}".format(next_action.get_description()))
                 self.actions.push_front(next_action.run(self.__action_context))
 
         self.update_ui()
