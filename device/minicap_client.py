@@ -59,6 +59,7 @@ class MinicapClient(QRunnable):
 
     def __start_minicap(self):
         print("run following commands manually, and keep it alive:")
+        print("adb pair 192.168.0.121:43141")
         print("adb shell LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/minicap -P 2340x1080@2340x1080/0")
         print("adb forward tcp:1313 localabstract:minicap")
 

@@ -1,14 +1,15 @@
 import PyQt5
 import sys
-import device_controller
-import flow_controller
-
-from actions import actions
-from logger import Logger
 from PyQt5.QtCore import QByteArray, QFile, QRunnable, QThreadPool, QTimer
 from PyQt5.QtWidgets import QApplication, QLabel, QListView, QListWidget, QListWidgetItem, QMainWindow, QPushButton, QScrollArea
 from PyQt5.QtGui import QPixmap
 from PyQt5 import uic
+
+from log.logger import Logger
+from actions import actions
+
+from flow import flow_controller
+from device import device_controller
 
 
 class Window(QMainWindow):
@@ -19,6 +20,7 @@ class Window(QMainWindow):
     label1: QLabel
     screenshot_scroll: QScrollArea
     list_logs: QListWidget
+    list_state: QListWidget
 
     def __init__(self):
         super().__init__()
@@ -27,10 +29,10 @@ class Window(QMainWindow):
         self.flow.flow.logger = self.logger
 
         self.device.update_screenshot.connect(self.update_screenshot)
-        self.flow.flow.update_actions.connect(self.update_actions)
+        self.flow.flow.connect_ui(self.update_actions, self.update_state)
         self.logger.append_log.connect(self.append_log)
 
-        uic.loadUi("main.ui", self)
+        uic.loadUi("ui/main.ui", self)
 
         self.flow_toggler.setText("Start")
         self.flow_toggler.clicked.connect(self.flow_toggler_clicked)
@@ -58,13 +60,19 @@ class Window(QMainWindow):
         self.list_actions.clear()
         self.list_actions.addItems(actions)
 
-    def append_log(self, s):
-      item = QListWidgetItem()
-      item.setText(s)
-      self.list_logs.insertItem(0, item)
+    def update_state(self, s):
+        self.list_state.clear()
+        item = QListWidgetItem()
+        item.setText(s)
+        self.list_state.addItem(item)
 
-      if self.list_logs.count() > 100:
-        self.list_logs.takeItem(self.list_logs.count()-1)
+    def append_log(self, s):
+        item = QListWidgetItem()
+        item.setText(s)
+        self.list_logs.insertItem(0, item)
+
+        if self.list_logs.count() > 100:
+            self.list_logs.takeItem(self.list_logs.count()-1)
 
     def btn2Clicked(self):
         self.device.capture_screenshot()
@@ -77,7 +85,7 @@ class Window(QMainWindow):
         self.label1.setPixmap(pixmap)
         self.label1.setFixedSize(pixmap.size())
 
-
-app = QApplication(sys.argv)
-window = Window()
-sys.exit(app.exec_())
+def main():
+    app = QApplication(sys.argv)
+    window = Window()
+    sys.exit(app.exec_())

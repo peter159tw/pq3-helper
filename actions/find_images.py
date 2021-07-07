@@ -1,6 +1,7 @@
 import cv2
 import configparser
-from logger import Logger
+
+from log.logger import Logger
 
 
 def cv_size(img):

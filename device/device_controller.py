@@ -3,7 +3,7 @@ import socket
 import numpy as np
 import cv2
 
-from minicap_client import MinicapClient
+from device.minicap_client import MinicapClient
 from PyQt5.QtCore import QByteArray, QObject
 from PyQt5.QtGui import QPixmap
 from PyQt5 import QtCore

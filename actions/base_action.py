@@ -1,17 +1,25 @@
 import copy
 
-from .find_images import ImageFindResult
-from device_controller import DeviceController
-from logger import Logger
+from PyQt5.QtCore import QObject, pyqtSignal
 from abc import ABC, abstractmethod
 
+from .find_images import ImageFindResult
+from flow.game_state import GameState
+from device.device_controller import DeviceController
+from log.logger import Logger
 
 
-class ActionRunningContext:
+
+class ActionRunningContext(QObject):
     device: DeviceController = None
     logger: Logger = None
-    
+
+    game_state: GameState = GameState()
+
     image_find_results: dict[str, ImageFindResult] = dict()
+
+    # signal to update UI
+    update_state = pyqtSignal(str)
 
 
 class BaseAction(ABC):

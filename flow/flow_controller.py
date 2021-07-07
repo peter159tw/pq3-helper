@@ -2,12 +2,13 @@ import threading
 import time
 import copy
 
-from collections import deque
 from actions import actions
-from logger import Logger
+from log.logger import Logger
+from device.device_controller import DeviceController
+
+from collections import deque
 from abc import ABC, abstractmethod
 from PyQt5 import QtCore
-from device_controller import DeviceController
 
 from PyQt5.QtCore import QObject, QRunnable, QThread
 
@@ -45,6 +46,10 @@ class FlowController(QObject):
     # signal to update UI
     update_actions = QtCore.pyqtSignal(object)
 
+    def connect_ui(self, update_actions, update_state):
+        self.update_actions.connect(update_actions)
+        self.__action_context.update_state.connect(update_state)
+
     def is_enabled(self):
         with self.__enabled_lock:
             return self.__enabled
@@ -60,7 +65,7 @@ class FlowController(QObject):
             self.__action_context.device = self.device
             self.__action_context.logger = self.logger
             if next_action:
-                self.logger.log("Running action: {}".format(next_action.get_description()))
+                # self.logger.log("Running action: {}".format(next_action.get_description()))
                 self.actions.push_front(next_action.run(self.__action_context))
 
         self.update_ui()

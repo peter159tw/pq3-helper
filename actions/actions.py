@@ -1,17 +1,19 @@
+from abc import ABC, abstractmethod
 import threading
 import copy
 import time
 from typing import Tuple
-import device_controller
 import numpy
 import cv2
 import random
 from enum import Enum
+
+from flow.game_state import GameState, MainState, SkillsState
+from device import device_controller
 from .find_images import ImageFindingSpec, find_image
 from .base_action import BaseAction, ActionRunningContext, ImageFindResult
 from collections import deque
-from logger import Logger
-from abc import ABC, abstractmethod
+from log.logger import Logger
 
 
 class ActionGenerateActionsUntil(BaseAction):
@@ -70,25 +72,8 @@ class ActionClickSpells(BaseAction):
             context.device.tap(skill[0], skill[1])
 
 
-class GameState(Enum):
-    UNKNOWN = 1
-    CHOOSE_PVP = 2
-    ENTER_PVP = 3
-    IN_BATTLE = 4
-    BATTLE_RESULT = 5
-
-
-class SkillsState(Enum):
-    UNKNOWN = 1
-    ALL_INACTIVE = 2
-    OTHERWISE = 3
-
-
 class ActionDecideAction(BaseAction):
     __always_check_specs: list[str]
-
-    __game_state: GameState = None
-    __skills_state: SkillsState = SkillsState.UNKNOWN
 
     __actions: list[BaseAction] = None
 
@@ -109,7 +94,11 @@ class ActionDecideAction(BaseAction):
 
         self.__decide(context)
         self.__log_state(context)
+        self.__update_ui(context)
         return self.__actions
+
+    def __update_ui(self, context: ActionRunningContext):
+        context.update_state.emit(str(context.game_state))
 
     def __decide(self, context: ActionRunningContext):
         specs = ["enter_open_pvp",
@@ -118,8 +107,8 @@ class ActionDecideAction(BaseAction):
                  "battle_waiting_action"
                  ]
 
-        self.__game_state = GameState.UNKNOWN
-        self.__skills_state = SkillsState.UNKNOWN
+        context.game_state.main_state = MainState.UNKNOWN
+        context.game_state.skills_state = SkillsState.UNKNOWN
         self.__find_specs(specs, context)
 
         found_spec = None
@@ -127,37 +116,38 @@ class ActionDecideAction(BaseAction):
             result = context.image_find_results[spec]
             if result.found:
                 if found_spec is not None:
-                    context.logger.log("WARNING: cannot determine game state strongly. should be one-of")
+                    context.logger.log(
+                        "WARNING: cannot determine game state strongly. should be one-of")
                 found_spec = spec
-        
+
         if found_spec is None:
             return
 
         result = context.image_find_results[found_spec]
         if found_spec == "enter_open_pvp" and result.found:
-            self.__game_state = GameState.CHOOSE_PVP
+            context.game_state.main_state = MainState.CHOOSE_PVP
             self.__generate_action_to_click_center_target(result)
 
         if found_spec == "enter_pvp_battle" and result.found:
-            self.__game_state = GameState.ENTER_PVP
+            context.game_state.main_state = MainState.ENTER_PVP
             self.__generate_action_to_click_center_target(result)
 
         if found_spec == "battle_waiting_action" and result.found:
-            self.__game_state = GameState.IN_BATTLE
+            context.game_state.main_state = MainState.IN_BATTLE
             self.__decide_in_battle_action(context)
 
         if found_spec == "exit_battle_result" and result.found:
-            self.__game_state = GameState.BATTLE_RESULT
+            context.game_state.main_state = MainState.BATTLE_RESULT
             self.__generate_action_to_click_center_target(result)
 
     def __decide_in_battle_action(self, context: ActionRunningContext):
         spec = "all_skills_inactive"
         self.__find_specs([spec], context)
         if context.image_find_results[spec].found:
-            self.__skills_state = SkillsState.ALL_INACTIVE
+            context.game_state.skills_state = SkillsState.ALL_INACTIVE
             self.__actions = [ActionRetreat()]
         else:
-            self.__skills_state = SkillsState.OTHERWISE
+            context.game_state.skills_state = SkillsState.OTHERWISE
             self.__actions = [ActionClickSpells()]
 
     def __find_specs(self, specs, context: ActionRunningContext):
@@ -170,9 +160,9 @@ class ActionDecideAction(BaseAction):
         action.pos_x = find_result.pos_x + find_result.target_w/2
         action.pos_y = find_result.pos_y + find_result.target_h/2
         self.__actions = [action]
-    
+
     def __log_state(self, context: ActionRunningContext):
-        context.logger.log("game state: {} skill state: {}".format(self.__game_state, self.__skills_state))
+        context.logger.log(str(context.game_state))
 
 
 class RootAction(BaseAction):
