@@ -10,8 +10,8 @@ from enum import Enum
 
 from flow.game_state import GameState, MainState, SkillsState
 from device import device_controller
-from .find_images import ImageFindingSpec, find_image
-from .base_action import BaseAction, ActionRunningContext, ImageFindResult
+from actions.find_images import ImageFindingSpec, find_image
+from actions.base_action import BaseAction, ActionRunningContext, ImageFindResult
 from collections import deque
 from log.logger import Logger
 
@@ -73,46 +73,44 @@ class ActionClickSpells(BaseAction):
 
 
 class ActionDecideAction(BaseAction):
-    __always_check_specs: list[str]
-
-    __actions: list[BaseAction] = None
-
-    def __init__(self):
-        super().__init__()
-        self.__always_check_specs = ["enter_open_pvp",
-                                     "enter_pvp_battle",
-                                     "exit_battle_result",
-                                     "battle_waiting_action",
-                                     "all_skills_inactive",
-                                     ]
-
     def run(self, context: ActionRunningContext):
-        context.image_find_results = dict()
-        for spec in self.__always_check_specs:
-            context.image_find_results[spec] = find_image(
-                spec, context.device.last_captured_screenshot, context.logger)
+        if context.device.last_captured_screenshot is None:
+            return
 
-        self.__decide(context)
-        self.__log_state(context)
+        actions = self.__decide(context)
         self.__update_ui(context)
-        return self.__actions
+
+        return actions
 
     def __update_ui(self, context: ActionRunningContext):
         context.update_state.emit(str(context.game_state))
 
     def __decide(self, context: ActionRunningContext):
-        specs = ["enter_open_pvp",
-                 "enter_pvp_battle",
-                 "exit_battle_result",
-                 "battle_waiting_action"
-                 ]
+        oneofs = dict()
+
+        def enter_open_pvp(result: ImageFindResult):
+            context.game_state.main_state = MainState.CHOOSE_PVP
+            return self.__generate_action_to_click_center_target(result)
+        oneofs["enter_open_pvp"] = enter_open_pvp
+
+        def enter_pvp_battle(result: ImageFindResult):
+            context.game_state.main_state = MainState.ENTER_PVP
+            return self.__generate_action_to_click_center_target(result)
+        oneofs["enter_pvp_battle"] = enter_pvp_battle
+
+        oneofs["battle_waiting_action"] = lambda result: self.__decide_in_battle_action(context)
+
+        def exit_battle_result(result: ImageFindResult):
+            context.game_state.main_state = MainState.BATTLE_RESULT
+            return self.__generate_action_to_click_center_target(result)
+        oneofs["exit_battle_result"] = exit_battle_result
 
         context.game_state.main_state = MainState.UNKNOWN
         context.game_state.skills_state = SkillsState.UNKNOWN
-        self.__find_specs(specs, context)
+        self.__find_specs(oneofs.keys(), context)
 
         found_spec = None
-        for spec in specs:
+        for spec in oneofs.keys():
             result = context.image_find_results[spec]
             if result.found:
                 if found_spec is not None:
@@ -123,32 +121,19 @@ class ActionDecideAction(BaseAction):
         if found_spec is None:
             return
 
-        result = context.image_find_results[found_spec]
-        if found_spec == "enter_open_pvp" and result.found:
-            context.game_state.main_state = MainState.CHOOSE_PVP
-            self.__generate_action_to_click_center_target(result)
-
-        if found_spec == "enter_pvp_battle" and result.found:
-            context.game_state.main_state = MainState.ENTER_PVP
-            self.__generate_action_to_click_center_target(result)
-
-        if found_spec == "battle_waiting_action" and result.found:
-            context.game_state.main_state = MainState.IN_BATTLE
-            self.__decide_in_battle_action(context)
-
-        if found_spec == "exit_battle_result" and result.found:
-            context.game_state.main_state = MainState.BATTLE_RESULT
-            self.__generate_action_to_click_center_target(result)
+        return oneofs[found_spec](context.image_find_results[found_spec])
 
     def __decide_in_battle_action(self, context: ActionRunningContext):
+        context.game_state.main_state = MainState.IN_BATTLE
+
         spec = "all_skills_inactive"
         self.__find_specs([spec], context)
         if context.image_find_results[spec].found:
             context.game_state.skills_state = SkillsState.ALL_INACTIVE
-            self.__actions = [ActionRetreat()]
+            return [ActionRetreat()]
         else:
             context.game_state.skills_state = SkillsState.OTHERWISE
-            self.__actions = [ActionClickSpells()]
+            return [ActionClickSpells()]
 
     def __find_specs(self, specs, context: ActionRunningContext):
         for spec in specs:
@@ -159,10 +144,8 @@ class ActionDecideAction(BaseAction):
         action = ActionClickPosition()
         action.pos_x = find_result.pos_x + find_result.target_w/2
         action.pos_y = find_result.pos_y + find_result.target_h/2
-        self.__actions = [action]
+        return [action]
 
-    def __log_state(self, context: ActionRunningContext):
-        context.logger.log(str(context.game_state))
 
 
 class RootAction(BaseAction):

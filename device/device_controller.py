@@ -21,8 +21,12 @@ class DeviceController(QObject):
     minicap_client: MinicapClient = MinicapClient()
 
     def capture_screenshot(self):
-        self.last_captured_screenshot = cv2.imdecode(
-            np.array(self.minicap_client.get_last_frame()), cv2.IMREAD_UNCHANGED)
+        try:
+            self.last_captured_screenshot = cv2.imdecode(
+                np.array(self.minicap_client.get_last_frame()), cv2.IMREAD_UNCHANGED)
+        except:
+            self.last_captured_screenshot = None
+            return
         cv2.imwrite(self.last_captured_screenshot_path,
                     self.last_captured_screenshot)
         self.update_screenshot.emit()

@@ -10,7 +10,7 @@ from collections import deque
 from abc import ABC, abstractmethod
 from PyQt5 import QtCore
 
-from PyQt5.QtCore import QObject, QRunnable, QThread
+from PyQt5.QtCore import QObject, QRunnable, QThread, QThreadPool
 
 
 class ActionList:
@@ -40,15 +40,25 @@ class FlowController(QObject):
     __action_context: actions.ActionRunningContext = actions.ActionRunningContext()
 
     actions = ActionList()
-    device: DeviceController
-    logger: Logger
+    device: DeviceController = DeviceController()
+    logger: Logger = Logger()
 
     # signal to update UI
-    update_actions = QtCore.pyqtSignal(object)
+    update_actions = QtCore.pyqtSignal(list)
 
-    def connect_ui(self, update_actions, update_state):
+    def __init__(self):
+        super().__init__()
+        self.actions.push_front([
+            actions.ActionGenerateActionsUntil(
+                actions.RootAction()
+            )
+        ])
+
+    def connect_ui(self, update_actions, update_state, update_screenshot, append_log):
         self.update_actions.connect(update_actions)
         self.__action_context.update_state.connect(update_state)
+        self.device.update_screenshot.connect(update_screenshot)
+        self.logger.append_log.connect(append_log)
 
     def is_enabled(self):
         with self.__enabled_lock:
@@ -83,6 +93,8 @@ class FlowRunner(QRunnable):
     flow = FlowController()
 
     def run(self):
+        QThreadPool.globalInstance().start(self.flow.device.minicap_client)
+
         while (True):
             self.flow.tick()
             time.sleep(0.01)  # avoid busy loop
