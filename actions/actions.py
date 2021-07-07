@@ -14,6 +14,7 @@ from actions.find_images import ImageFindingSpec, find_image
 from actions.base_action import BaseAction, ActionRunningContext, ImageFindResult
 from collections import deque
 from log.logger import Logger
+from dataset import images_manager
 
 
 class ActionGenerateActionsUntil(BaseAction):
@@ -125,6 +126,10 @@ class ActionDecideAction(BaseAction):
 
     def __decide_in_battle_action(self, context: ActionRunningContext):
         context.game_state.main_state = MainState.IN_BATTLE
+
+        metadata = images_manager.ImageMetadata()
+        metadata.categorized_as = "in_battle"
+        #context.images_manager.add_img(context.device.last_captured_screenshot, metadata)
 
         spec = "all_skills_inactive"
         self.__find_specs([spec], context)

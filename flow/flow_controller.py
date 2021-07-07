@@ -2,15 +2,15 @@ import threading
 import time
 import copy
 
-from actions import actions
-from log.logger import Logger
-from device.device_controller import DeviceController
-
 from collections import deque
 from abc import ABC, abstractmethod
 from PyQt5 import QtCore
-
 from PyQt5.QtCore import QObject, QRunnable, QThread, QThreadPool
+
+from actions import actions
+from log.logger import Logger
+from device.device_controller import DeviceController
+from dataset.images_manager import ImagesManager
 
 
 class ActionList:
@@ -43,6 +43,8 @@ class FlowController(QObject):
     device: DeviceController = DeviceController()
     logger: Logger = Logger()
 
+    images_manager: ImagesManager = ImagesManager()
+
     # signal to update UI
     update_actions = QtCore.pyqtSignal(list)
 
@@ -74,6 +76,7 @@ class FlowController(QObject):
 
             self.__action_context.device = self.device
             self.__action_context.logger = self.logger
+            self.__action_context.images_manager = self.images_manager
             if next_action:
                 # self.logger.log("Running action: {}".format(next_action.get_description()))
                 self.actions.push_front(next_action.run(self.__action_context))
