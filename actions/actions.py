@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 import threading
 import copy
 import time
-from typing import Tuple
+from typing import Iterable, Tuple
 import numpy
 import cv2
 import random
@@ -26,29 +26,32 @@ class ActionGenerateActionsUntil(BaseAction):
     def get_arguments(self):
         return ["action_to_generate: {0}".format(self.__action_to_generate.get_description())]
 
-    def run(self, context):
-        self_action = copy.deepcopy(self)
-        self.__action_to_generate.update_caller(self)
-
-        return [self.__action_to_generate, self_action]
+    def run(self, context) -> Iterable[BaseAction]:
+        while True:
+            yield self.__action_to_generate
 
 
 class ActionCaptureScreenshot(BaseAction):
-    def run(self, context: ActionRunningContext):
+    def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         context.device.capture_screenshot()
         context.image_find_results.clear()
+
+        yield from ()
 
 
 class ActionClickPosition(BaseAction):
     pos_x: int
     pos_y: int
 
-    def run(self, context: ActionRunningContext):
+    def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         context.device.tap(self.pos_x, self.pos_y)
+
+        yield from ()
+
 
 
 class ActionRetreat(BaseAction):
-    def run(self, context: ActionRunningContext):
+    def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         context.logger.log("Retreating")
         context.device.tap(200, 54)
         time.sleep(5)
@@ -57,9 +60,11 @@ class ActionRetreat(BaseAction):
         context.device.tap(1418, 778)
         time.sleep(5)
 
+        yield from ()
+
 
 class ActionClickSpells(BaseAction):
-    def run(self, context: ActionRunningContext):
+    def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         context.logger.log("Clicking skills")
 
         skills = []
@@ -72,21 +77,22 @@ class ActionClickSpells(BaseAction):
         for skill in skills:
             context.device.tap(skill[0], skill[1])
 
+        yield from ()
+
 
 class ActionDecideAction(BaseAction):
-    def run(self, context: ActionRunningContext):
+    def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         if context.device.last_captured_screenshot is None:
             return
 
-        actions = self.__decide(context)
-        self.__update_ui(context)
-
-        return actions
+        for action in self.__decide(context):
+            self.__update_ui(context)
+            yield action
 
     def __update_ui(self, context: ActionRunningContext):
         context.update_state.emit(str(context.game_state))
 
-    def __decide(self, context: ActionRunningContext):
+    def __decide(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         oneofs = dict()
 
         def enter_open_pvp(result: ImageFindResult):
@@ -120,11 +126,12 @@ class ActionDecideAction(BaseAction):
                 found_spec = spec
 
         if found_spec is None:
+            yield from ()
             return
 
-        return oneofs[found_spec](context.image_find_results[found_spec])
+        yield from oneofs[found_spec](context.image_find_results[found_spec])
 
-    def __decide_in_battle_action(self, context: ActionRunningContext):
+    def __decide_in_battle_action(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         context.game_state.main_state = MainState.IN_BATTLE
 
         metadata = images_manager.ImageMetadata()
@@ -135,17 +142,17 @@ class ActionDecideAction(BaseAction):
         self.__find_specs([spec], context)
         if context.image_find_results[spec].found:
             context.game_state.skills_state = SkillsState.ALL_INACTIVE
-            return [ActionRetreat()]
+            yield ActionRetreat()
         else:
             context.game_state.skills_state = SkillsState.OTHERWISE
-            return [ActionClickSpells()]
+            yield ActionClickSpells()
 
     def __find_specs(self, specs, context: ActionRunningContext):
         for spec in specs:
             context.image_find_results[spec] = find_image(
                 spec, context.device.last_captured_screenshot, context.logger)
 
-    def __generate_action_to_click_center_target(self, find_result: ImageFindResult):
+    def __generate_action_to_click_center_target(self, find_result: ImageFindResult) -> Iterable[BaseAction]:
         action = ActionClickPosition()
         action.pos_x = find_result.pos_x + find_result.target_w/2
         action.pos_y = find_result.pos_y + find_result.target_h/2
@@ -153,9 +160,7 @@ class ActionDecideAction(BaseAction):
 
 
 
-class RootAction(BaseAction):
-    def run(self, context: ActionRunningContext) -> list[BaseAction]:
-        return [
-            ActionCaptureScreenshot(),
-            ActionDecideAction()
-        ]
+class ActionOpenPvp(BaseAction):
+    def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
+        yield ActionCaptureScreenshot()
+        yield ActionDecideAction()

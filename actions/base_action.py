@@ -1,4 +1,5 @@
 import copy
+from typing import Iterable
 
 from PyQt5.QtCore import QObject, pyqtSignal
 from abc import ABC, abstractmethod
@@ -26,16 +27,11 @@ class ActionRunningContext(QObject):
 class BaseAction(ABC):
     __separator = "  "
 
-    callers = []
-
     def get_status(self) -> str:
         out = self.get_description()
 
         for arg in self.get_arguments():
             out = out + "\n" + self.__separator + arg
-
-        out = out + "\n" + self.__separator + \
-            "call path: " + '->'.join(self.callers)
 
         return out
 
@@ -45,13 +41,6 @@ class BaseAction(ABC):
     def get_arguments(self) -> list[str]:
         return []
 
-    # Return a list of actions which will be pushed to the front of the action list
     @abstractmethod
     def run(self, context: ActionRunningContext):
         pass
-
-    def update_caller(self, parent):
-        self.callers = []
-        if parent.callers:
-            self.callers = copy.deepcopy(parent.callers)
-        self.callers.append(parent.__class__.__name__)

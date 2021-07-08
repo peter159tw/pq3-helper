@@ -1,3 +1,5 @@
+from typing import Deque, Iterable, List
+from actions.base_action import ActionRunningContext, BaseAction
 import threading
 import time
 import copy
@@ -13,24 +15,26 @@ from device.device_controller import DeviceController
 from dataset.images_manager import ImagesManager
 
 
-class ActionList:
-  # thread safe
+class ActionEntry:
+    action: BaseAction = None
+    state: Iterable[BaseAction] = None
 
-    __actions = deque()
+    def __init__(self, action: BaseAction):
+        super().__init__()
+        self.action = action
 
-    def push_front(self, actions: list[actions.BaseAction]):
-        if actions:
-            for action in reversed(actions):
-                self.__actions.appendleft(action)
+    def step(self, list: deque, context: ActionRunningContext):
+        if self.state is None:
+            self.state = self.action.run(context)
 
-    def pop_front(self) -> actions.BaseAction:
-        if (not self.__actions):
-            return None
+        try:
+            new_action = next(self.state)
+        except StopIteration:
+            return
 
-        return self.__actions.popleft()
-
-    def get_actions(self) -> list[actions.BaseAction]:
-        return copy.deepcopy(self.__actions)
+        list.appendleft(self)
+        if new_action is not None:
+            list.appendleft(ActionEntry(new_action))
 
 
 class FlowController(QObject):
@@ -39,7 +43,8 @@ class FlowController(QObject):
 
     __action_context: actions.ActionRunningContext = actions.ActionRunningContext()
 
-    actions = ActionList()
+    __actions: Deque = deque()
+
     device: DeviceController = DeviceController()
     logger: Logger = Logger()
 
@@ -50,11 +55,9 @@ class FlowController(QObject):
 
     def __init__(self):
         super().__init__()
-        self.actions.push_front([
-            actions.ActionGenerateActionsUntil(
-                actions.RootAction()
-            )
-        ])
+        self.__actions.appendleft(ActionEntry(actions.ActionGenerateActionsUntil(
+            actions.ActionOpenPvp()
+        )))
 
     def connect_ui(self, update_actions, update_state, update_screenshot, append_log):
         self.update_actions.connect(update_actions)
@@ -72,21 +75,19 @@ class FlowController(QObject):
 
     def tick(self):
         if self.is_enabled():
-            next_action = self.actions.pop_front()
-
             self.__action_context.device = self.device
             self.__action_context.logger = self.logger
             self.__action_context.images_manager = self.images_manager
-            if next_action:
-                # self.logger.log("Running action: {}".format(next_action.get_description()))
-                self.actions.push_front(next_action.run(self.__action_context))
+
+            next_action = self.__actions.popleft()
+            next_action.step(self.__actions, self.__action_context)
 
         self.update_ui()
 
     def update_ui(self):
         readable_actions = []
-        for action in self.actions.get_actions():
-            readable_actions.append(action.get_status())
+        for entry in self.__actions:
+            readable_actions.append(entry.action.get_status())
             pass
 
         self.update_actions.emit(readable_actions)
