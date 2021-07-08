@@ -27,6 +27,7 @@ class DeviceController(QObject):
         except:
             self.last_captured_screenshot = None
             return
+            
         cv2.imwrite(self.last_captured_screenshot_path,
                     self.last_captured_screenshot)
         self.update_screenshot.emit()

@@ -27,11 +27,14 @@ class ActionRunningContext(QObject):
 class BaseAction(ABC):
     __separator = "  "
 
-    def get_status(self) -> str:
+    def __str__(self) -> str:
         out = self.get_description()
 
         for arg in self.get_arguments():
             out = out + "\n" + self.__separator + arg
+
+        if status := self.get_status():
+            out = out + "\n" + self.__separator + "status: " + status
 
         return out
 
@@ -40,6 +43,9 @@ class BaseAction(ABC):
 
     def get_arguments(self) -> list[str]:
         return []
+
+    def get_status(self) -> str:
+        pass
 
     @abstractmethod
     def run(self, context: ActionRunningContext):

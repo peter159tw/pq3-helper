@@ -32,11 +32,24 @@ class ActionGenerateActionsUntil(BaseAction):
 
 
 class ActionCaptureScreenshot(BaseAction):
+    __start_time = None
+
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
-        context.device.capture_screenshot()
+        self.__start_time = time.time()
+        while True:
+            context.device.capture_screenshot()
+            if context.device.last_captured_screenshot is not None:
+                break
+
+            yield None  # call me back later
+
         context.image_find_results.clear()
 
-        yield from ()
+    def get_status(self) -> str:
+        if self.__start_time is None:
+            return "not started yet"
+
+        return "elapsed {:.1f} seconds...".format(time.time()-self.__start_time)
 
 
 class ActionClickPosition(BaseAction):
@@ -80,8 +93,9 @@ class ActionClickSpells(BaseAction):
         yield from ()
 
 
-class ActionDecideAction(BaseAction):
+class ActionOpenPvp(BaseAction):
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
+        yield ActionCaptureScreenshot()
         if context.device.last_captured_screenshot is None:
             return
 
@@ -157,10 +171,3 @@ class ActionDecideAction(BaseAction):
         action.pos_x = find_result.pos_x + find_result.target_w/2
         action.pos_y = find_result.pos_y + find_result.target_h/2
         return [action]
-
-
-
-class ActionOpenPvp(BaseAction):
-    def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
-        yield ActionCaptureScreenshot()
-        yield ActionDecideAction()

@@ -87,7 +87,7 @@ class FlowController(QObject):
     def update_ui(self):
         readable_actions = []
         for entry in self.__actions:
-            readable_actions.append(entry.action.get_status())
+            readable_actions.append(str(entry.action))
             pass
 
         self.update_actions.emit(readable_actions)
