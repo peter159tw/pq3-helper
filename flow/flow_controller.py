@@ -24,12 +24,19 @@ class ActionEntry:
         self.action = action
 
     def step(self, list: deque, context: ActionRunningContext):
+        self.action.start_time = time.time()
+
         if self.state is None:
+            self.action.start_time = time.time()
             self.state = self.action.run(context)
 
         try:
             new_action = next(self.state)
         except StopIteration:
+            if self.action.log_elapsed_time:
+                context.logger.log("action {} finished in {:.1f} second".format(
+                    self.action.get_description(),
+                    time.time()-self.action.start_time))
             return
 
         list.appendleft(self)
@@ -55,9 +62,7 @@ class FlowController(QObject):
 
     def __init__(self):
         super().__init__()
-        self.__actions.appendleft(ActionEntry(actions.ActionGenerateActionsUntil(
-            actions.ActionOpenPvp()
-        )))
+        self.__actions.appendleft(ActionEntry(actions.ActionOpenPvpForever()))
 
     def connect_ui(self, update_actions, update_state, update_screenshot, append_log):
         self.update_actions.connect(update_actions)

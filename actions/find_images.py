@@ -1,5 +1,6 @@
 import cv2
 import configparser
+import numpy
 
 from log.logger import Logger
 
@@ -81,11 +82,18 @@ def find_image(spec_name: str, screenshot, logger: Logger) -> ImageFindResult:
         result.found = True
         result.pos_x = spec.expect_pos_x
         result.pos_y = spec.expect_pos_y
-        logger.log("Found spec '{0}'! val: {1} Writing pos: {2},{3}".format(
-            spec_name, min_val, result.pos_x, result.pos_y))
+        #logger.log("Found spec '{0}'! val: {1} Writing pos: {2},{3}".format(
+        #    spec_name, min_val, result.pos_x, result.pos_y))
     else:
         result.found = False
         # context.logger.log(
         #   "Did not find spec '{0}'. min_val: {1}".format(spec.target, min_val))
 
     return result
+
+
+def img_diff_score(img1, img2, x1, y1, x2, y2):
+    img1_roi = cv_roi(img1, x1, y1, x2-x1, y2-y1)
+    img2_roi = cv_roi(img2, x1, y1, x2-x1, y2-y1)
+    diff = cv2.absdiff(img1_roi, img2_roi)
+    return numpy.mean(diff)
