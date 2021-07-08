@@ -32,6 +32,4 @@ class DeviceController(QObject):
         self.update_screenshot.emit()
 
     def tap(self, pos_x, pos_y):
-        process = subprocess.Popen(
-            ["/usr/local/bin/adb", "shell", "input", "tap", str(pos_x), str(pos_y)], stdout=subprocess.PIPE)
-        stdout = process.communicate()[0]
+        subprocess.call("adb -s 0B111JEC213922 shell input tap {} {}".format(str(pos_x), str(pos_y)), shell=True)

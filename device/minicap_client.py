@@ -45,7 +45,7 @@ class MinicapServer(QRunnable):
 
         print("Starting Minicap server")
         #subprocess.run(["/usr/local/bin/adb", "shell", "LD_LIBRARY_PATH=/data/local/tmp", " /data/local/tmp/minicap", "-P", "2340x1080@2340x1080/0"], shell=True)
-        subprocess.call("adb shell LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/minicap -P 2340x1080@2340x1080/0", shell=True)
+        subprocess.call("adb -s 0B111JEC213922 shell LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/minicap -P 2340x1080@2340x1080/0", shell=True)
 
         print("Minicap server died.")
 
@@ -100,7 +100,7 @@ class MinicapClient(QRunnable):
 
         print("starting forward")
         #subprocess.run(["/usr/local/bin/adb", "forward", "tcp:1313", " localabstract:minicap"], shell=True)
-        subprocess.call("adb forward tcp:1313 localabstract:minicap", shell=True)
+        subprocess.call("adb -s 0B111JEC213922 forward tcp:1313 localabstract:minicap", shell=True)
         print("forward command exited (it's normal...)")
         time.sleep(1)
 
