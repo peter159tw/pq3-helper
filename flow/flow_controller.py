@@ -24,8 +24,6 @@ class ActionEntry:
         self.action = action
 
     def step(self, list: deque, context: ActionRunningContext):
-        self.action.start_time = time.time()
-
         if self.state is None:
             self.action.start_time = time.time()
             self.state = self.action.run(context)

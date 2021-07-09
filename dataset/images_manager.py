@@ -3,7 +3,7 @@ import pathlib
 import time
 import cv2
 from configparser import ConfigParser
-from typing import List
+from typing import Callable, List
 
 
 class ImageMetadata:
@@ -45,3 +45,16 @@ class ImagesManager:
     def __write_config(self):
         with open(self.__config_path, "w") as f:
             self.__config.write(f)
+
+    def get_matched_image_paths(self, matcher: Callable[[ImageMetadata], bool]):
+        self.__config.read(self.__config_path)
+
+        paths = []
+        for section in self.__config.sections():
+            metadata = ImageMetadata()
+            metadata.from_dict(self.__config[section])
+            if matcher(metadata):
+                path = os.path.join(self.__folder, section)
+                paths.append(path)
+
+        return paths

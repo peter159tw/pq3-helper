@@ -52,7 +52,6 @@ class ActionClickPosition(BaseAction):
 
 class ActionRetreat(BaseAction):
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
-        context.logger.log("Retreating")
         context.device.tap(200, 54)
         time.sleep(5)
         context.device.tap(1950, 54)
@@ -65,8 +64,6 @@ class ActionRetreat(BaseAction):
 
 class ActionClickSpells(BaseAction):
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
-        context.logger.log("Clicking skills")
-
         skills = []
         skills.append((818, 976))
         skills.append((984, 976))
@@ -144,14 +141,19 @@ class ActionWaitBoardStable(BaseAction):
         return state
 
 
-class ActionOpenPvpForever(BaseAction):
+class ActionOpenPvp(BaseAction):
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
-        while True:
-            yield ActionCaptureScreenshot()
+        while True:  # until we have a valid action
+            has_action = False
 
+            yield ActionCaptureScreenshot()
             for action in self.__decide(context):
+                has_action = True
                 self.__update_ui(context)
                 yield action
+
+            if has_action:
+                break
 
     def __update_ui(self, context: ActionRunningContext):
         context.update_state.emit(str(context.game_state))
@@ -201,10 +203,9 @@ class ActionOpenPvpForever(BaseAction):
         metadata.categorized_as = "in_battle"
         #context.images_manager.add_img(context.device.last_captured_screenshot, metadata)
 
-        yield (act := ActionWaitBoardStable())
-        print("wait_board_stable.result: " + str(act.result))
-        if act.result != ActionWaitBoardStable.Result.STABLIZED:
-            return
+        #yield (act := ActionWaitBoardStable())
+        #if act.result != ActionWaitBoardStable.Result.STABLIZED:
+        #    return
 
         spec = "all_skills_inactive"
         self.__find_specs([spec], context)
@@ -225,3 +226,9 @@ class ActionOpenPvpForever(BaseAction):
         action.pos_x = find_result.pos_x + find_result.target_w/2
         action.pos_y = find_result.pos_y + find_result.target_h/2
         return [action]
+
+
+class ActionOpenPvpForever(BaseAction):
+    def run(self, context: ActionRunningContext):
+        while True:
+            yield ActionOpenPvp()

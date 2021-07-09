@@ -12,6 +12,9 @@ def read_bytes(socket, length):
     length -= len(out)
     while length > 0:
         more = socket.recv(length)
+        if len(more) == 0:
+            raise ConnectionAbortedError()
+
         out += more
         length -= len(more)
     return bytearray(out)
