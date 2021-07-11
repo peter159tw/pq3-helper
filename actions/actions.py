@@ -135,55 +135,24 @@ class ActionWaitBoardStable(BaseAction):
         return state
 
 
-class ActionOpenPvp(BaseAction):
+class ActionParseGameState(BaseAction):
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
-        while True:  # until we have a valid action
-            has_action = False
-
-            yield ActionCaptureScreenshot()
-            for action in self.__decide(context):
-                has_action = True
-                self.__update_ui(context)
-                yield action
-
-            if has_action:
-                break
+        yield ActionCaptureScreenshot()
+        self.__parse(context)
+        self.__update_ui(context)
 
     def __update_ui(self, context: ActionRunningContext):
         context.update_state.emit(str(context.game_state))
 
-    def __decide(self, context: ActionRunningContext) -> Iterable[BaseAction]:
+    def __parse(self, context: ActionRunningContext):
         oneofs = dict()
+        oneofs["enter_open_pvp"] = lambda : self.__set_game_main_state(context, MainState.CHOOSE_PVP)
+        oneofs["enter_pvp_battle"] = lambda: self.__set_game_main_state(context, MainState.ENTER_PVP)
+        oneofs["battle_waiting_action"] = lambda: self.__parse_in_battle(context)
+        oneofs["exit_battle_result"] = lambda: self.__set_game_main_state(context, MainState.BATTLE_RESULT)
+        oneofs["retreat_in_battle_detail_view"] = lambda: self.__set_game_main_state(context, MainState.BATTLE_DETAIL_VIEW)
+        oneofs["retreat_confirm"] = lambda: self.__set_game_main_state(context, MainState.RETREAT_CONFIRM)
 
-        def enter_open_pvp(result: ImageFindResult):
-            context.game_state.main_state = MainState.CHOOSE_PVP
-            yield from self.__generate_action_to_click_center_target(result)
-        oneofs["enter_open_pvp"] = enter_open_pvp
-
-        def enter_pvp_battle(result: ImageFindResult):
-            context.game_state.main_state = MainState.ENTER_PVP
-            yield from self.__generate_action_to_click_center_target(result)
-        oneofs["enter_pvp_battle"] = enter_pvp_battle
-
-        oneofs["battle_waiting_action"] = lambda result: self.__decide_in_battle_action(context)
-
-        def exit_battle_result(result: ImageFindResult):
-            context.game_state.main_state = MainState.BATTLE_RESULT
-            yield from self.__generate_action_to_click_center_target(result)
-        oneofs["exit_battle_result"] = exit_battle_result
-
-        def battle_detail_view(result: ImageFindResult):
-            context.game_state.main_state = MainState.BATTLE_DETAIL_VIEW
-            yield from self.__generate_action_to_click_center_target(result)
-        oneofs["retreat_in_battle_detail_view"] = battle_detail_view
-
-        def retreat_confirm(result):
-            context.game_state.main_state = MainState.RETREAT_CONFIRM
-            yield from self.__generate_action_to_click_center_target(result)
-        oneofs["retreat_confirm"] = retreat_confirm
-
-        context.game_state.main_state = MainState.UNKNOWN
-        context.game_state.skills_state = SkillsState.UNKNOWN
         self.__find_specs(oneofs.keys(), context)
 
         found_spec = None
@@ -195,12 +164,16 @@ class ActionOpenPvp(BaseAction):
                         "WARNING: cannot determine game state strongly. should be one-of")
                 found_spec = spec
 
-        if found_spec is None:
-            return
+        context.game_state.main_state = MainState.UNKNOWN
+        context.game_state.skills_state = SkillsState.UNKNOWN
+        if found_spec is not None:
+            oneofs[found_spec]()
 
-        yield from oneofs[found_spec](context.image_find_results[found_spec])
+    def __set_game_main_state(self, context: ActionRunningContext, state):
+        context.game_state.main_state = state
 
-    def __decide_in_battle_action(self, context: ActionRunningContext) -> Iterable[BaseAction]:
+
+    def __parse_in_battle(self, context: ActionRunningContext):
         context.game_state.main_state = MainState.IN_BATTLE
 
         metadata = images_manager.ImageMetadata()
@@ -215,24 +188,63 @@ class ActionOpenPvp(BaseAction):
         self.__find_specs([spec], context)
         if context.image_find_results[spec].found:
             context.game_state.skills_state = SkillsState.ALL_INACTIVE
-            yield ActionRetreat()
         else:
             context.game_state.skills_state = SkillsState.OTHERWISE
-            yield ActionClickSpells()
 
     def __find_specs(self, specs, context: ActionRunningContext):
         for spec in specs:
-            start_time = time.time()
             context.image_find_results[spec] = find_images.find_image(
                 spec, context.device.last_captured_screenshot, context.logger)
-            #context.logger.log("find_image for spec '{}' took {:.2f} secs".format(spec, time.time()-start_time))
 
-    def __generate_action_to_click_center_target(self, find_result: ImageFindResult) -> Iterable[BaseAction]:
+
+class ActionOpenPvp(BaseAction):
+    def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
+        while True:  # until we have a valid action, to have a meaninful logging on how long an open-pvp run is finished
+            has_action = False
+
+            yield ActionParseGameState()
+            for action in self.__decide(context):
+                has_action = True
+                yield action
+
+            if has_action:
+                break
+
+    def __decide(self, context: ActionRunningContext) -> Iterable[BaseAction]:
+        if context.game_state.main_state == MainState.CHOOSE_PVP:
+            yield from self.__generate_action_to_click_center_target(context, "enter_open_pvp")
+            time.sleep(0.5)  # allow game to switch view
+        
+        if context.game_state.main_state == MainState.ENTER_PVP:
+            yield from self.__generate_action_to_click_center_target(context, "enter_pvp_battle")
+            time.sleep(0.5)  # allow game to switch view
+        
+        if context.game_state.main_state == MainState.IN_BATTLE:
+            if context.game_state.skills_state == SkillsState.ALL_INACTIVE:
+                yield ActionRetreat()
+                time.sleep(0.5)  # allow game to switch view
+            else:
+                yield ActionClickSpells()
+                time.sleep(0.5)  # allow game to switch view
+
+        if context.game_state.main_state == MainState.BATTLE_RESULT:
+            yield from self.__generate_action_to_click_center_target(context, "exit_battle_result")
+            time.sleep(0.5)  # allow game to switch view
+        
+        if context.game_state.main_state == MainState.BATTLE_DETAIL_VIEW:
+            yield from self.__generate_action_to_click_center_target(context, "retreat_in_battle_detail_view")
+            time.sleep(0.5)  # allow game to switch view
+        
+        if context.game_state.main_state == MainState.RETREAT_CONFIRM:
+            yield from self.__generate_action_to_click_center_target(context, "retreat_confirm")
+            time.sleep(0.5)  # allow game to switch view
+
+    def __generate_action_to_click_center_target(self, context: ActionRunningContext, spec_name: str) -> Iterable[BaseAction]:
+        find_result = context.image_find_results[spec_name]
         action = ActionClickPosition()
         action.pos_x = find_result.pos_x + find_result.target_w/2
         action.pos_y = find_result.pos_y + find_result.target_h/2
         yield action
-        time.sleep(0.5)  # allow game to switch view
 
 
 class ActionOpenPvpForever(BaseAction):
