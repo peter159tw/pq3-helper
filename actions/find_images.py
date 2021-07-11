@@ -86,8 +86,8 @@ def find_image(spec_name: str, screenshot, logger: Logger) -> ImageFindResult:
         #    spec_name, min_val, result.pos_x, result.pos_y))
     else:
         result.found = False
-        # context.logger.log(
-        #   "Did not find spec '{0}'. min_val: {1}".format(spec.target, min_val))
+        #logger.log(
+        #  "Did not find spec '{0}'. min_val: {1}".format(spec_name, min_val))
 
     return result
 

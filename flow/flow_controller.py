@@ -100,8 +100,8 @@ class FlowRunner(QRunnable):
     flow = FlowController()
 
     def run(self):
-        QThreadPool.globalInstance().start(self.flow.device.minicap_client)
+        #QThreadPool.globalInstance().start(self.flow.device.minicap_client)
 
         while (True):
             self.flow.tick()
-            time.sleep(0.01)  # avoid busy loop
+            time.sleep(0.1)  # avoid busy loop

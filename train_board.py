@@ -1,6 +1,7 @@
 import os
 from typing import Dict
 import cv2
+import time
 import pathlib
 import numpy
 import matplotlib.pyplot as plt
@@ -28,6 +29,10 @@ def get_grid_rect(idx_x: int, idx_y: int):
     x = x1 + w*idx_x
     y = y1 + h*idx_y
     return (int(x), int(y), int(w), int(h))
+
+def get_grid_center(x:int, y:int):
+    (x,y,w,h) = get_grid_rect(x,y)
+    return (x+w/2, y+h/2)
 
 def cv_roi(img, x, y, w, h):
     return img[y:y+h, x:x+w]
@@ -71,36 +76,37 @@ def compare_grid_image(img, seeds: dict):
     return (min_seed_name, min_score)
 
 
-mgr = images_manager.ImagesManager()
+if __name__ == "__main__":
+    mgr = images_manager.ImagesManager()
 
-images = mgr.get_matched_image_paths(lambda metadata: metadata.categorized_as == "stabled_board")
-print(len(images))
+    images = mgr.get_matched_image_paths(lambda metadata: metadata.categorized_as == "stabled_board")
+    print(len(images))
 
-seeds_files = ["blue.bmp","red.bmp","green.bmp","purple.bmp","skull.bmp","yellow.bmp"]
+    seeds_files = ["blue.bmp","red.bmp","green.bmp","purple.bmp","skull.bmp","yellow.bmp"]
 
-seeds = {}
-for img_name in seeds_files:
-    path = os.path.join(result_folder, "board", img_name)
-    seeds[img_name[:-4]] = cv2.imread(path)
+    seeds = {}
+    for img_name in seeds_files:
+        path = os.path.join(result_folder, "board", img_name)
+        seeds[img_name[:-4]] = cv2.imread(path)
 
 
-grid_imgs = []
-for path in images:
-    print(path)
-    img = cv2.imread(path)
+    grid_imgs = []
+    for path in images:
+        print(path)
+        img = cv2.imread(path)
 
-    for x_idx in range(x_grids):
-        for y_idx in range(y_grids):
-            (x,y,w,h) = get_grid_rect(x_idx, y_idx)
-            img_grid = cv_roi(img, x,y,w,h)
+        for x_idx in range(x_grids):
+            for y_idx in range(y_grids):
+                (x,y,w,h) = get_grid_rect(x_idx, y_idx)
+                img_grid = cv_roi(img, x,y,w,h)
 
-            (grid_type, score) = compare_grid_image(img_grid, seeds)
+                (grid_type, score) = compare_grid_image(img_grid, seeds)
 
-            folder = os.path.join(tmp_folder, grid_type)
-            pathlib.Path(folder).mkdir(exist_ok=True)
+                folder = os.path.join(tmp_folder, grid_type)
+                pathlib.Path(folder).mkdir(exist_ok=True)
 
-            grid_filename = "score_{:.2f}_{}_grid_{}_{}.bmp".format(score, os.path.basename(path), x_idx, y_idx)
-            grid_filepath = os.path.join(tmp_folder, grid_filename)
-            grid_file_path = os.path.join(folder, grid_filename)
-            cv2.imwrite(grid_file_path, img_grid)
+                grid_filename = "score_{:.2f}_{}_grid_{}_{}.bmp".format(score, os.path.basename(path), x_idx, y_idx)
+                grid_filepath = os.path.join(tmp_folder, grid_filename)
+                grid_file_path = os.path.join(folder, grid_filename)
+                cv2.imwrite(grid_file_path, img_grid)
 

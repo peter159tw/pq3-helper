@@ -7,6 +7,8 @@ class MainState(Enum):
     ENTER_PVP = 3
     IN_BATTLE = 4
     BATTLE_RESULT = 5
+    BATTLE_DETAIL_VIEW = 6
+    RETREAT_CONFIRM = 7
 
 
 class SkillsState(Enum):
