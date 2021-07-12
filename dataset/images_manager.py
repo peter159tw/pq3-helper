@@ -30,6 +30,7 @@ class ImagesManager:
             os.getcwd(), os.path.dirname(__file__), "data"))
         pathlib.Path(self.__folder).mkdir(exist_ok=True)
         self.__config_path = os.path.join(self.__folder, "config.ini")
+        self.__config.read(self.__config_path)
 
     def add_img(self, img, metadata: ImageMetadata):
         filename = self.__write_img(img)

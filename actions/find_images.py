@@ -82,12 +82,10 @@ def find_image(spec_name: str, screenshot, logger: Logger) -> ImageFindResult:
         result.found = True
         result.pos_x = spec.expect_pos_x
         result.pos_y = spec.expect_pos_y
-        #logger.log("Found spec '{0}'! val: {1} Writing pos: {2},{3}".format(
-        #    spec_name, min_val, result.pos_x, result.pos_y))
+        #logger.log("Found spec '{0}'! val: {1} Writing pos: {2},{3}".format(spec_name, min_val, result.pos_x, result.pos_y))
     else:
         result.found = False
-        #logger.log(
-        #  "Did not find spec '{0}'. min_val: {1}".format(spec_name, min_val))
+        #logger.log("Did not find spec '{0}'. min_val: {1}".format(spec_name, min_val))
 
     return result
 

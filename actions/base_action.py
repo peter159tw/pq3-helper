@@ -9,11 +9,13 @@ from flow.game_state import GameState
 from device.device_controller import DeviceController
 from log.logger import Logger
 from dataset.images_manager import ImagesManager
+from board.board_image_parser import BoardImageParser
 
 
 class ActionRunningContext(QObject):
     device: DeviceController = None
     logger: Logger = None
+    board_image_parse: BoardImageParser = None
     images_manager: ImagesManager = None
 
     game_state: GameState = GameState()

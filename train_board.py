@@ -59,9 +59,6 @@ def grid_diff_score(img, seed):
 
     return min_val
 
-    #diff = cv2.absdiff(img, seed)
-    #return numpy.mean(diff)
-
 def compare_grid_image(img, seeds: dict):
     scores = []
 

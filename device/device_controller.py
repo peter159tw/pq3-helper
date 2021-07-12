@@ -34,3 +34,6 @@ class DeviceController(QObject):
     def tap(self, x, y):
         #subprocess.call("adb -s 0B111JEC213922 shell input tap {} {}".format(str(x), str(y)), shell=True)
         self.monkey_runner.touch(x, y)
+
+    def drag(self, x1, y1, x2, y2):
+        self.monkey_runner.drag(x1,y1,x2,y2)

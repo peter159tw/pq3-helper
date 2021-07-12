@@ -13,6 +13,7 @@ from actions import actions
 from log.logger import Logger
 from device.device_controller import DeviceController
 from dataset.images_manager import ImagesManager
+from board.board_image_parser import BoardImageParser
 
 
 class ActionEntry:
@@ -61,6 +62,7 @@ class FlowController(QObject):
     def __init__(self):
         super().__init__()
         self.__actions.appendleft(ActionEntry(actions.ActionOpenPvpForever()))
+        self.board_image_parse = BoardImageParser()
 
     def connect_ui(self, update_actions, update_state, update_screenshot, append_log):
         self.update_actions.connect(update_actions)
@@ -80,6 +82,7 @@ class FlowController(QObject):
         if self.is_enabled():
             self.__action_context.device = self.device
             self.__action_context.logger = self.logger
+            self.__action_context.board_image_parse = self.board_image_parse
             self.__action_context.images_manager = self.images_manager
 
             next_action = self.__actions.popleft()
