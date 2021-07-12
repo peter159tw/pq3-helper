@@ -45,6 +45,11 @@ class ActionClickPosition(BaseAction):
     pos_x: int
     pos_y: int
 
+    def __init__(self, x, y):
+        super().__init__()
+        self.pos_x = x
+        self.pos_y = y
+
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         context.device.tap(self.pos_x, self.pos_y)
         yield from ()
@@ -58,6 +63,8 @@ class ActionRetreat(BaseAction):
 
 
 class ActionClickSpells(BaseAction):
+    # click all spells until they're all inactive
+
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         skills = []
         skills.append((818, 976))
@@ -66,21 +73,21 @@ class ActionClickSpells(BaseAction):
         skills.append((1516, 976))
         skills.append((1171, 962))  # ultimate
 
-        for skill in skills:
-            context.device.tap(skill[0], skill[1])
+        for x,y in skills:
+            self.__click_spell(x,y, context)
 
         yield from ()
 
+    def __click_spell(self, x, y, context: ActionRunningContext):
+        context.device.tap(x, y)
+
+
 class ActionMoveGrids(BaseAction):
+    def __init__(self, steps):
+        self.__steps = steps
+
     def run(self, context: ActionRunningContext) -> Iterable[BaseAction]:
-        board = context.board_image_parse.parse(context.device.last_captured_screenshot)
-        print(board)
-
-        board_ai = BoardAI()
-        steps = board_ai.decide_best_result(board)
-        print(steps)
-
-        for (x1, y1, x2, y2) in steps:
+        for (x1, y1, x2, y2) in self.__steps:
             context.device.drag(
                 *board_image_parser.get_grid_center(x1,y1),
                 *board_image_parser.get_grid_center(x2,y2)
@@ -99,21 +106,25 @@ class ActionWaitBoardStable(BaseAction):
     diff_threshold = 10.0
     stable_secs = 2.0
 
+    prev_img = None
+    stable_from_time = None
+
     class Result(enum.Enum):
         STABLIZED = enum.auto()
         NOT_IN_BATTLE = enum.auto()
     result: Result = None
 
     def __init__(self):
-        self.prev_img = None
+        # don't clear "prev_img" and "stable_from_time" so we can memorize what's the last stable board, and early-exit if nothing happens between
         self.diff_score = -1.0
-        self.stable_from_time = None
         self.board_score = None
 
     def run(self, context: ActionRunningContext):
         while True:
-            board = context.board_image_parse.parse(context.device.last_captured_screenshot, report=False)
-            self.board_score = board.parse_score
+            yield ActionCaptureScreenshot()
+
+            context.game_state.board = context.board_image_parse.parse(context.device.last_captured_screenshot, report=False)
+            self.board_score = context.game_state.board.parse_score
             if self.board_score < 0.1:
                 # board is recognizable. have confidence it's already stable
                 break
@@ -134,10 +145,8 @@ class ActionWaitBoardStable(BaseAction):
             if self.stable_from_time:
                 if time.time()-self.stable_from_time > self.stable_secs:
                     break
-            
-            self.prev_img = img
 
-            yield ActionCaptureScreenshot()
+            self.prev_img = img
 
 
         metadata = images_manager.ImageMetadata()
@@ -187,9 +196,16 @@ class ActionParseGameState(BaseAction):
         oneofs["choose_altar"] = lambda: self.__set_game_main_state(context, MainState.CHOOSE_ALTAR)
         oneofs["dungeon_marks_confirm"] = lambda: self.__set_game_main_state(context, MainState.DUNGEON_MARKS_CONFIRM)
         oneofs["battle_result_chest_full"] = lambda: self.__set_game_main_state(context, MainState.BATTLE_RESULT_CHEST_FULL)
+        oneofs["revive_window"] = lambda: self.__set_game_main_state(context, MainState.REVIVE_WINDOW)
+        oneofs["quest_battle"] = lambda: self.__set_game_main_state(context, MainState.QUEST_BATTLE)
+        oneofs["quest_begin"] = lambda: self.__set_game_main_state(context, MainState.QUEST_BEGIN)
+        oneofs["quest_collect"] = lambda: self.__set_game_main_state(context, MainState.QUEST_COLLECT)
+        oneofs["quest_skip"] = lambda: self.__set_game_main_state(context, MainState.QUEST_SKIP)
+        oneofs["quest_talk"] = lambda: self.__set_game_main_state(context, MainState.QUEST_TALK)
 
         self.__find_specs(oneofs.keys(), context)
 
+        start_time = time.time()
         found_spec = None
         for spec in oneofs.keys():
             result = context.image_find_results[spec]
@@ -198,11 +214,11 @@ class ActionParseGameState(BaseAction):
                     context.logger.log(
                         "WARNING: cannot determine game state strongly. should be one-of")
                 found_spec = spec
+        context.logger.log("find spec takes {:.1f} seconds".format(time.time()-start_time))
 
         context.game_state.main_state = MainState.UNKNOWN
         context.game_state.skills_state = SkillsState.UNKNOWN
         if found_spec is not None:
-            context.logger.log("debug: found_spec={}".format(found_spec))
             yield from oneofs[found_spec]()
 
     def __set_game_main_state(self, context: ActionRunningContext, state) -> Iterable[BaseAction]:
@@ -223,6 +239,8 @@ class ActionParseGameState(BaseAction):
             context.game_state.skills_state = SkillsState.ALL_INACTIVE
         else:
             context.game_state.skills_state = SkillsState.OTHERWISE
+
+        yield from ()
 
     def __parse_battle_result(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         spec = "battle_result_chest_action"
@@ -267,9 +285,12 @@ class ActionOpenPvp(BaseAction):
             time.sleep(0.5)  # allow game to switch view
         
         if context.game_state.main_state == MainState.IN_BATTLE:
-            #if context.game_state.skills_state == SkillsState.ALL_INACTIVE or context.game_state.skill_click_count > 5:
-            if context.game_state.skill_click_count > 5:
-                yield ActionMoveGrids()
+            if context.game_state.skill_click_count > 5 or context.game_state.skills_state == SkillsState.ALL_INACTIVE:
+                context.game_state.board = context.board_image_parse.parse(context.device.last_captured_screenshot)
+                board_ai = BoardAI()
+                result = board_ai.decide_best_result(context.game_state.board)
+
+                yield ActionMoveGrids(result.steps)
                 context.game_state.skill_click_count = 0
                 #yield ActionRetreat()
                 time.sleep(1)  # allow game to switch view
@@ -309,12 +330,18 @@ class ActionOpenPvp(BaseAction):
             yield from self.__generate_action_to_click_center_target(context, "dungeon_marks_confirm")
             time.sleep(0.5)
 
+        if context.game_state.main_state == MainState.REVIVE_WINDOW:
+            yield ActionClickPosition(1532, 129)
+            time.sleep(0.5)
+
+        if context.game_state.main_state == MainState.QUEST_BATTLE:
+            yield ActionClickPosition(1996, 1016)
+            time.sleep(0.5)
+
     def __generate_action_to_click_center_target(self, context: ActionRunningContext, spec_name: str) -> Iterable[BaseAction]:
         find_result = context.image_find_results[spec_name]
-        action = ActionClickPosition()
-        action.pos_x = find_result.pos_x + find_result.target_w/2
-        action.pos_y = find_result.pos_y + find_result.target_h/2
-        yield action
+        yield ActionClickPosition(find_result.pos_x + find_result.target_w/2,
+            find_result.pos_y + find_result.target_h/2)
 
 
 class ActionOpenPvpForever(BaseAction):

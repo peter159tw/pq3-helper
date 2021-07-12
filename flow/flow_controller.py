@@ -3,6 +3,7 @@ from actions.base_action import ActionRunningContext, BaseAction
 import threading
 import time
 import copy
+import gc
 
 from collections import deque
 from abc import ABC, abstractmethod
@@ -107,4 +108,5 @@ class FlowRunner(QRunnable):
 
         while (True):
             self.flow.tick()
+            gc.collect()
             time.sleep(0.1)  # avoid busy loop

@@ -24,7 +24,7 @@ class GridType:
 
     def record_image(self, img, score):
         folder = os.path.realpath(os.path.join(self.folder_path, "../dataset", self.name))
-        pathlib.Path(folder).mkdir(exist_ok=True)
+        os.makedirs(folder, exist_ok=True)
         path = os.path.join(folder, "score_{:.3f}.bmp".format(score))
         cv2.imwrite(path, img)
 

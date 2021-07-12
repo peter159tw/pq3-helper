@@ -1,9 +1,10 @@
+from board.board import Board
 from enum import Enum
 from typing import Set
 
 
 class MainState(Enum):
-    # next id: 14
+    # next id: 20
 
     UNKNOWN = 1
     CHOOSE_PVP = 2
@@ -18,6 +19,12 @@ class MainState(Enum):
     PVP_FIND_OPPONENT = 8
     CHOOSE_ALTAR = 10
     DUNGEON_MARKS_CONFIRM = 11
+    REVIVE_WINDOW = 14
+    QUEST_BATTLE = 15
+    QUEST_BEGIN = 16
+    QUEST_COLLECT = 17
+    QUEST_SKIP = 18
+    QUEST_TALK = 19
 
 
 class SkillsState(Enum):
@@ -31,11 +38,15 @@ class GameState:
         self.main_state = MainState.UNKNOWN
         self.skills_state = SkillsState.UNKNOWN
         self.skill_click_count = 0
+        self.board : Board = None
 
     def __str__(self):
         o = "game state: {}\nskill state: {}".format(
             self.main_state, self.skills_state)
 
         o = o + "\nskill_click_count: {}".format(self.skill_click_count)
+
+        if self.board is not None:
+            o = o + "\nBoard:\n{}".format(str(self.board))
 
         return o
