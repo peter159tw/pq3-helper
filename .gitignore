@@ -3,3 +3,4 @@ log/log
 train_tmp/
 ai_tmp/
 ai/ai
+board/grid_types/dataset/

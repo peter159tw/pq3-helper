@@ -63,6 +63,10 @@ class MinicapClient(QRunnable):
 
     __server = None
 
+    def __init__(self):
+        super().__init__()
+        QThreadPool.globalInstance().start(self)
+
     def run(self):
         print("run following commands manually, and keep it alive:")
         print("adb pair 192.168.0.121:43141")

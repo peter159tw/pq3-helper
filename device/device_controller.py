@@ -19,10 +19,10 @@ class DeviceController(QObject):
     last_captured_screenshot = None
     last_captured_screenshot_path: str = "/Users/petershih/Documents/pq3-helper/_temp_last_screenshot.png"
 
-    #minicap_client: MinicapClient = MinicapClient()
+    minicap_client: MinicapClient = MinicapClient()
     monkey_runner: MonkeyRunnerAdaptor = MonkeyRunnerAdaptor()
 
-    def capture_screenshot(self):
+    def capture_screenshot2(self):
         self.monkey_runner.take_snapshot(self.last_captured_screenshot_path, "png")
         try:
             self.last_captured_screenshot = cv2.imread(self.last_captured_screenshot_path)
@@ -30,6 +30,13 @@ class DeviceController(QObject):
             self.last_captured_screenshot = None
             return
         self.update_screenshot.emit()
+
+    def capture_screenshot(self):
+        img_bytes = self.minicap_client.get_last_frame()
+        self.last_captured_screenshot = cv2.imdecode(img_bytes, cv2.IMREAD_COLOR)
+        cv2.imwrite(self.last_captured_screenshot_path, self.last_captured_screenshot)
+        self.update_screenshot.emit()
+        
 
     def tap(self, x, y):
         #subprocess.call("adb -s 0B111JEC213922 shell input tap {} {}".format(str(x), str(y)), shell=True)

@@ -1,6 +1,8 @@
 from typing import Tuple
 import cv2
 import math
+import os
+import numpy
 from board.grid_types import GridTypes, GridType
 from board.board import Board
 
@@ -60,6 +62,38 @@ def compare_grid_image(img, grid_types: GridTypes) -> Tuple[GridType, float]:
     
     return (min_grid_type, min_score)
 
+class HpParser:
+    x1 = 1756
+    y1 = 976
+    x2 = 2100
+    y2 = 1019
+
+    img_full_path = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__), "hp", "full.png"))
+    img_full = None
+
+    def __init__(self):
+        self.img_full = self._get_roi(cv2.imread(self.img_full_path))
+
+    def _get_roi(self, img):
+        return img[self.y1:self.y2,self.x1:self.x2]
+
+    def parse(self, board_img) -> float:
+        img = self._get_roi(board_img)
+        img_diff = cv2.absdiff(self.img_full, img)
+        img_diff = cv2.cvtColor(img_diff, cv2.COLOR_BGR2GRAY)
+        img_mean = numpy.mean(img_diff, axis=0)
+        img_binary = img_mean > 40
+
+        max_pos = 0
+        max_score = 0
+        for x in range(img_binary.shape[0]):
+            score = numpy.sum(img_binary[:x] == True) + numpy.sum(img_binary[x:] == False) 
+            if score > max_score:
+                max_pos = x
+                max_score = score
+        return (img_binary.shape[0]-max_pos) / img_binary.shape[0]
+
+
 class BoardImageParser:
     grid_types = GridTypes()
 
@@ -87,5 +121,5 @@ class BoardImageParser:
         return ret
 
     def __report_grid_parse_result(self, img_grid, grid_type: GridType, score):
-        if score > 0.1:
+        if score > 0.05:
             grid_type.record_image(img_grid, score)

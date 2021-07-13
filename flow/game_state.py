@@ -4,7 +4,7 @@ from typing import Set
 
 
 class MainState(Enum):
-    # next id: 20
+    # next id: 22
 
     UNKNOWN = 1
     CHOOSE_PVP = 2
@@ -25,6 +25,8 @@ class MainState(Enum):
     QUEST_COLLECT = 17
     QUEST_SKIP = 18
     QUEST_TALK = 19
+    SIDE_QUEST_BATTLE = 20
+    SIDE_QUEST_COLLECT = 21
 
 
 class SkillsState(Enum):
@@ -39,12 +41,15 @@ class GameState:
         self.skills_state = SkillsState.UNKNOWN
         self.skill_click_count = 0
         self.board : Board = None
+        self.hp : float = 0.0
 
     def __str__(self):
         o = "game state: {}\nskill state: {}".format(
             self.main_state, self.skills_state)
 
         o = o + "\nskill_click_count: {}".format(self.skill_click_count)
+
+        o = o + "\nHP: {:.3f}".format(self.hp)
 
         if self.board is not None:
             o = o + "\nBoard:\n{}".format(str(self.board))

@@ -76,6 +76,8 @@ class ActionClickSpells(BaseAction):
         for x,y in skills:
             self.__click_spell(x,y, context)
 
+        time.sleep(1)
+
         yield from ()
 
     def __click_spell(self, x, y, context: ActionRunningContext):
@@ -92,7 +94,7 @@ class ActionMoveGrids(BaseAction):
                 *board_image_parser.get_grid_center(x1,y1),
                 *board_image_parser.get_grid_center(x2,y2)
             )
-            time.sleep(0.2)
+            time.sleep(0.3)
 
         yield from ()
 
@@ -121,11 +123,10 @@ class ActionWaitBoardStable(BaseAction):
 
     def run(self, context: ActionRunningContext):
         while True:
-            yield ActionCaptureScreenshot()
-
             context.game_state.board = context.board_image_parse.parse(context.device.last_captured_screenshot, report=False)
             self.board_score = context.game_state.board.parse_score
-            if self.board_score < 0.1:
+            print("ActionWaitBoardStable: " + str(self.board_score))
+            if self.board_score < 0.15:
                 # board is recognizable. have confidence it's already stable
                 break
 
@@ -147,6 +148,7 @@ class ActionWaitBoardStable(BaseAction):
                     break
 
             self.prev_img = img
+            yield ActionCaptureScreenshot()
 
 
         metadata = images_manager.ImageMetadata()
@@ -202,6 +204,8 @@ class ActionParseGameState(BaseAction):
         oneofs["quest_collect"] = lambda: self.__set_game_main_state(context, MainState.QUEST_COLLECT)
         oneofs["quest_skip"] = lambda: self.__set_game_main_state(context, MainState.QUEST_SKIP)
         oneofs["quest_talk"] = lambda: self.__set_game_main_state(context, MainState.QUEST_TALK)
+        oneofs["side_quest_battle"] = lambda: self.__set_game_main_state(context, MainState.SIDE_QUEST_BATTLE)
+        oneofs["side_quest_collect"] = lambda: self.__set_game_main_state(context, MainState.SIDE_QUEST_COLLECT)
 
         self.__find_specs(oneofs.keys(), context)
 
@@ -285,25 +289,44 @@ class ActionOpenPvp(BaseAction):
             time.sleep(0.5)  # allow game to switch view
         
         if context.game_state.main_state == MainState.IN_BATTLE:
-            if context.game_state.skill_click_count > 5 or context.game_state.skills_state == SkillsState.ALL_INACTIVE:
+            context.game_state.hp = board_image_parser.HpParser().parse(context.device.last_captured_screenshot)
+            def decide_best_steps():
                 context.game_state.board = context.board_image_parse.parse(context.device.last_captured_screenshot)
                 board_ai = BoardAI()
-                result = board_ai.decide_best_result(context.game_state.board)
+                return board_ai.decide_best_result(context.game_state.board)
 
+
+            context.update_state.emit(str(context.game_state))
+
+            move_grids = context.game_state.skill_click_count > 5 or context.game_state.skills_state == SkillsState.ALL_INACTIVE
+            
+            result = decide_best_steps()
+            move_grids = move_grids or result.final_board_has_stun
+            # for PVP to cast spells in first turn
+            #result.final_board_has_stun = False
+
+            # if hp is lower enough, don't click spells to avoid stun skill kills the enemy
+            if context.game_state.hp < 0.08:
+                move_grids = True
+
+            if move_grids:
+                if result is None:
+                    result = decide_best_steps()
                 yield ActionMoveGrids(result.steps)
                 context.game_state.skill_click_count = 0
-                #yield ActionRetreat()
-                time.sleep(1)  # allow game to switch view
             else:
                 yield ActionClickSpells()
                 context.game_state.skill_click_count += 1
-                time.sleep(1)  # allow game to switch view
+                time.sleep(0.5)
 
         if context.game_state.main_state == MainState.BATTLE_RESULT:
             yield from self.__generate_action_to_click_center_target(context, "exit_battle_result")
             time.sleep(0.5)  # allow game to switch view
         if context.game_state.main_state == MainState.BATTLE_RESULT_CHEST_ACTION:
             # salavage button
+            metadata = images_manager.ImageMetadata()
+            metadata.categorized_as = "chest_action"
+            context.images_manager.add_img(context.device.last_captured_screenshot, metadata)
             yield from self.__generate_action_to_click_center_target(context, "battle_result_chest_action")
             time.sleep(0.5)
         if context.game_state.main_state == MainState.BATTLE_RESULT_CHEST_FULL:
@@ -335,6 +358,22 @@ class ActionOpenPvp(BaseAction):
             time.sleep(0.5)
 
         if context.game_state.main_state == MainState.QUEST_BATTLE:
+            yield ActionClickPosition(1996, 1016)
+            time.sleep(0.5)
+
+        if context.game_state.main_state == MainState.QUEST_TALK:
+            yield ActionClickPosition(1985,1020)
+            time.sleep(0.5)
+
+        if context.game_state.main_state == MainState.QUEST_SKIP:
+            yield ActionClickPosition(2062,77)
+            time.sleep(0.5)
+
+        if context.game_state.main_state == MainState.SIDE_QUEST_BATTLE:
+            yield ActionClickPosition(1996, 1016)
+            time.sleep(0.5)
+
+        if context.game_state.main_state == MainState.SIDE_QUEST_COLLECT:
             yield ActionClickPosition(1996, 1016)
             time.sleep(0.5)
 
