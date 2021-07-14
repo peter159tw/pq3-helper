@@ -4,7 +4,7 @@ from typing import Set
 
 
 class MainState(Enum):
-    # next id: 22
+    # next id: 24
 
     UNKNOWN = 1
     CHOOSE_PVP = 2
@@ -27,6 +27,8 @@ class MainState(Enum):
     QUEST_TALK = 19
     SIDE_QUEST_BATTLE = 20
     SIDE_QUEST_COLLECT = 21
+    SIDE_QUEST_BEGIN = 22
+    DUNGEON_BATTLE = 23
 
 
 class SkillsState(Enum):

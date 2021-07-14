@@ -20,26 +20,6 @@ def read_bytes(socket, length):
     return bytearray(out)
 
 
-def read_frames(socket):
-    print("connecting to minicap server")
-    version = read_bytes(socket, 1)[0]
-    print("Version {}".format(version))
-    banner_length = read_bytes(socket, 1)[0]
-    banner_rest = read_bytes(socket, banner_length - 2)
-    print("Banner length {}".format(banner_length))
-
-    while True:
-        frame_bytes = list(read_bytes(socket, 4))
-
-        total = 0
-        frame_bytes.reverse()
-        for byte in frame_bytes:
-            total = (total << 8) + byte
-
-        jpeg_data = read_bytes(socket, total)
-        yield jpeg_data
-
-
 class MinicapServer(QRunnable):
     def run(self) -> None:
         print("Killing old minicap server")
@@ -58,14 +38,13 @@ class MinicapClient(QRunnable):
 
     __connection = None
 
-    __last_frame = bytearray()
-    __last_frame_lock = threading.Lock()
-
     __server = None
 
     def __init__(self):
         super().__init__()
         QThreadPool.globalInstance().start(self)
+        self.__last_frame = bytearray()
+        self.__last_frame_cond = threading.Condition()
 
     def run(self):
         print("run following commands manually, and keep it alive:")
@@ -73,31 +52,33 @@ class MinicapClient(QRunnable):
         print("adb shell killall minicap")
         print("adb shell LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/minicap -P 2340x1080@2340x1080/0")
         print("adb forward tcp:1313 localabstract:minicap")
-        self.__connect_minicap()
 
-        self.__connection = socket.create_connection(('127.0.0.1', 1313))
+        while True:
+            try:
+                self.__connect_minicap()
+                for frame in self.__read_frames(self.__connection):
+                    self.__set_last_frame(frame)
+            except:
+                print("minicap connect is broken... reconnecting")
 
-        for frame in read_frames(self.__connection):
-            self.__set_last_frame(frame)
+            try:
+                self.__connection.shutdown(socket.SHUT_RDWR)
+                self.__connection.close()
+            except:
+                pass
 
-        self.__connection.shutdown(socket.SHUT_RDWR)
-        self.__connection.close()
-
+            self.__server = None
+            
+    
     def __connect_minicap(self):
-        self.__connection = None
-
         if self.__server is None:
             self.__server = MinicapServer()
             QThreadPool.globalInstance().start(self.__server)
+            time.sleep(5)
 
-        time.sleep(3)
         self.__forward_minicap_port()
+        self.__connection = socket.create_connection(('127.0.0.1', 1313))
 
-
-        #print("run following commands manually, and keep it alive:")
-        #print("adb pair 192.168.0.121:43141")
-        #print("adb shell LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/minicap -P 2340x1080@2340x1080/0")
-        #print("adb forward tcp:1313 localabstract:minicap")
 
     def __forward_minicap_port(self):
         print("kill existing forward")
@@ -112,12 +93,34 @@ class MinicapClient(QRunnable):
         time.sleep(1)
 
 
+    def __read_frames(self, socket):
+        print("connecting to minicap server")
+        version = read_bytes(socket, 1)[0]
+        print("Version {}".format(version))
+        banner_length = read_bytes(socket, 1)[0]
+        banner_rest = read_bytes(socket, banner_length - 2)
+        print("Banner length {}".format(banner_length))
+
+        while True:
+            frame_bytes = list(read_bytes(socket, 4))
+
+            total = 0
+            frame_bytes.reverse()
+            for byte in frame_bytes:
+                total = (total << 8) + byte
+
+            jpeg_data = read_bytes(socket, total)
+            yield jpeg_data
+
+
     def __set_last_frame(self, frame):
-        with self.__last_frame_lock:
+        with self.__last_frame_cond:
             self.__last_frame[:] = frame
+            self.__last_frame_cond.notify_all()
 
     def get_last_frame(self):
         ret: bytearray = bytearray()
-        with self.__last_frame_lock:
+        with self.__last_frame_cond:
+            self.__last_frame_cond.wait()
             ret[:] = self.__last_frame
         return ret

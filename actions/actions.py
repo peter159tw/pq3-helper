@@ -76,7 +76,7 @@ class ActionClickSpells(BaseAction):
         for x,y in skills:
             self.__click_spell(x,y, context)
 
-        time.sleep(1)
+        time.sleep(2)
 
         yield from ()
 
@@ -199,12 +199,14 @@ class ActionParseGameState(BaseAction):
         oneofs["dungeon_marks_confirm"] = lambda: self.__set_game_main_state(context, MainState.DUNGEON_MARKS_CONFIRM)
         oneofs["battle_result_chest_full"] = lambda: self.__set_game_main_state(context, MainState.BATTLE_RESULT_CHEST_FULL)
         oneofs["revive_window"] = lambda: self.__set_game_main_state(context, MainState.REVIVE_WINDOW)
+        oneofs["dungeon_battle"] = lambda: self.__set_game_main_state(context, MainState.QUEST_BATTLE)
         oneofs["quest_battle"] = lambda: self.__set_game_main_state(context, MainState.QUEST_BATTLE)
         oneofs["quest_begin"] = lambda: self.__set_game_main_state(context, MainState.QUEST_BEGIN)
         oneofs["quest_collect"] = lambda: self.__set_game_main_state(context, MainState.QUEST_COLLECT)
         oneofs["quest_skip"] = lambda: self.__set_game_main_state(context, MainState.QUEST_SKIP)
         oneofs["quest_talk"] = lambda: self.__set_game_main_state(context, MainState.QUEST_TALK)
         oneofs["side_quest_battle"] = lambda: self.__set_game_main_state(context, MainState.SIDE_QUEST_BATTLE)
+        oneofs["side_quest_begin"] = lambda: self.__set_game_main_state(context, MainState.SIDE_QUEST_BEGIN)
         oneofs["side_quest_collect"] = lambda: self.__set_game_main_state(context, MainState.SIDE_QUEST_COLLECT)
 
         self.__find_specs(oneofs.keys(), context)
@@ -276,7 +278,7 @@ class ActionOpenPvp(BaseAction):
 
     def __decide(self, context: ActionRunningContext) -> Iterable[BaseAction]:
         if context.game_state.main_state == MainState.CHOOSE_PVP:
-            #yield from self.__generate_action_to_click_center_target(context, "enter_open_pvp")
+            yield from self.__generate_action_to_click_center_target(context, "enter_open_pvp")
             time.sleep(0.5)  # allow game to switch view
         
         if context.game_state.main_state == MainState.ENTER_PVP:
@@ -300,13 +302,14 @@ class ActionOpenPvp(BaseAction):
 
             move_grids = context.game_state.skill_click_count > 5 or context.game_state.skills_state == SkillsState.ALL_INACTIVE
             
-            result = decide_best_steps()
-            move_grids = move_grids or result.final_board_has_stun
-            # for PVP to cast spells in first turn
-            #result.final_board_has_stun = False
+            result = None
+            # comment next line for PVP to cast spells in first turn
+            #result = decide_best_steps()
+            if result is not None:
+                move_grids = move_grids or result.final_board_has_stun
 
             # if hp is lower enough, don't click spells to avoid stun skill kills the enemy
-            if context.game_state.hp < 0.08:
+            if context.game_state.hp < 0.12:
                 move_grids = True
 
             if move_grids:
@@ -320,7 +323,7 @@ class ActionOpenPvp(BaseAction):
                 time.sleep(0.5)
 
         if context.game_state.main_state == MainState.BATTLE_RESULT:
-            yield from self.__generate_action_to_click_center_target(context, "exit_battle_result")
+            yield ActionClickPosition(2041,1027)
             time.sleep(0.5)  # allow game to switch view
         if context.game_state.main_state == MainState.BATTLE_RESULT_CHEST_ACTION:
             # salavage button
@@ -357,6 +360,10 @@ class ActionOpenPvp(BaseAction):
             yield ActionClickPosition(1532, 129)
             time.sleep(0.5)
 
+        if context.game_state.main_state == MainState.QUEST_BEGIN:
+            yield ActionClickPosition(1992, 1016)
+            time.sleep(0.5)
+
         if context.game_state.main_state == MainState.QUEST_BATTLE:
             yield ActionClickPosition(1996, 1016)
             time.sleep(0.5)
@@ -373,8 +380,16 @@ class ActionOpenPvp(BaseAction):
             yield ActionClickPosition(1996, 1016)
             time.sleep(0.5)
 
+        if context.game_state.main_state == MainState.SIDE_QUEST_BEGIN:
+            yield ActionClickPosition(1992, 1016)
+            time.sleep(0.5)
+
         if context.game_state.main_state == MainState.SIDE_QUEST_COLLECT:
             yield ActionClickPosition(1996, 1016)
+            time.sleep(0.5)
+
+        if context.game_state.main_state == MainState.DUNGEON_BATTLE:
+            yield ActionClickPosition(1865, 1011)
             time.sleep(0.5)
 
     def __generate_action_to_click_center_target(self, context: ActionRunningContext, spec_name: str) -> Iterable[BaseAction]:

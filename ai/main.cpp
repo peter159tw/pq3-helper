@@ -309,6 +309,9 @@ private:
             return; // already visited
         }
 
+        // early-exit
+        if (this->results_.size() > 1000) return;
+
         bool any_swappable = false;
         for (int x = 0; x < 7; ++x)
         {

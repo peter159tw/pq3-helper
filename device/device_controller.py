@@ -32,9 +32,15 @@ class DeviceController(QObject):
         self.update_screenshot.emit()
 
     def capture_screenshot(self):
-        img_bytes = self.minicap_client.get_last_frame()
-        self.last_captured_screenshot = cv2.imdecode(img_bytes, cv2.IMREAD_COLOR)
-        cv2.imwrite(self.last_captured_screenshot_path, self.last_captured_screenshot)
+        try:
+            self.last_captured_screenshot = cv2.imdecode(
+                np.array(self.minicap_client.get_last_frame()), cv2.IMREAD_UNCHANGED)
+        except:
+            self.last_captured_screenshot = None
+            return
+            
+        cv2.imwrite(self.last_captured_screenshot_path,
+                    self.last_captured_screenshot)
         self.update_screenshot.emit()
         
 
