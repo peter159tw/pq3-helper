@@ -1,5 +1,6 @@
+from board.ai import BoardAI
 from typing import Deque, Iterable, List
-from actions.base_action import ActionRunningContext, BaseAction
+from actions.base_action import ActionRunningContext, BaseAction, BoardStableChecker
 import threading
 import time
 import copy
@@ -55,6 +56,9 @@ class FlowController(QObject):
     device: DeviceController = DeviceController()
     logger: Logger = Logger()
 
+    board_ai: BoardAI = BoardAI()
+    board_stable_checker: BoardStableChecker() = BoardStableChecker()
+
     images_manager: ImagesManager = ImagesManager()
 
     # signal to update UI
@@ -84,7 +88,9 @@ class FlowController(QObject):
             self.__action_context.device = self.device
             self.__action_context.logger = self.logger
             self.__action_context.board_image_parse = self.board_image_parse
+            self.__action_context.board_stable_checker = self.board_stable_checker
             self.__action_context.images_manager = self.images_manager
+            self.__action_context.board_ai = self.board_ai
 
             next_action = self.__actions.popleft()
             next_action.step(self.__actions, self.__action_context)

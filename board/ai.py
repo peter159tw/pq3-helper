@@ -39,7 +39,15 @@ class Result:
 class BoardAI:
     ai_binary_path = "/Users/petershih/Documents/pq3-helper/ai/ai"
 
+    def __init__(self):
+        self.last_board : Board = None
+        self.last_board_result : Result = None
+
     def decide_best_result(self, board: Board) -> Result:
+        if self.last_board is not None and self.last_board == board:
+            print("ai cache hit")
+            return self.last_board_result
+
         proc = subprocess.Popen(self.ai_binary_path, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
 
         s = ""
@@ -62,8 +70,13 @@ class BoardAI:
             result.steps.append((x1,y1,x2,y2))
 
         self._fill_detail_result(board, result)
+        self._cache_result(board, result)
 
         return result
+
+    def _cache_result(self, board: Board, result: Result) :
+        self.last_board = board
+        self.last_board_result = result
 
     def _fill_detail_result(self, board: Board, result: Result):
         result.final_board = board

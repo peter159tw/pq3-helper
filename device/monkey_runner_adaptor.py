@@ -9,7 +9,7 @@ class MonkeyRunnerTargetRunner(QRunnable):
     def run(self) -> None:
         print("starting monkey runner")
         subprocess.call("kill $(lsof -ti tcp:13728)", shell=True)
-        subprocess.call("/Users/petershih/Library/Android/sdk/tools/bin/monkeyrunner /Users/petershih/Documents/pq3-helper/device/monkey_runner_target.py", shell=True)
+        subprocess.call("/Users/petershih/Library/Android/sdk/tools/bin/monkeyrunner /Users/petershih/Documents/pq3-helper/device/monkey_runner_target.py", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         print("monkey runner died")
 
 class MonkeyRunnerAdaptor:

@@ -247,15 +247,20 @@ public:
         if (rhs.final_board_has_stun)
             return false;
 
-        // prefer blues
-        const int lhs_blue_count = lhs.final_board_locks_per_grid_type[0];
-        const int rhs_blue_count = rhs.final_board_locks_per_grid_type[0];
+        // prefer blues=0, purples=2
+        const int lhs_blue_count = lhs.final_board_locks_per_grid_type[2];
+        const int rhs_blue_count = rhs.final_board_locks_per_grid_type[2];
         if (lhs_blue_count > rhs_blue_count)
             return true;
         if (rhs_blue_count > lhs_blue_count)
             return false;
 
-        return lhs.final_board_locks > rhs.final_board_locks;
+        if (lhs.final_board_locks > rhs.final_board_locks)
+            return true;
+        if (rhs.final_board_locks > lhs.final_board_locks)
+            return false;
+
+        return lhs.steps.size() < rhs.steps.size();
     }
 
 private:
