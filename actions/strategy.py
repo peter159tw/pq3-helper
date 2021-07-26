@@ -58,6 +58,7 @@ class Strategy:
         # Assassin
         self._non_board_changing_skills = [Skill.SKILL_2]
         self._board_changing_skills = [Skill.SKILL_1, Skill.SKILL_3]
+        self._no_damage_skills = [Skill.SKILL_1]
         self._stun_skill = [Skill.SKILL_4]
 
     def _get_active_stun_skill(self) -> Skill:
@@ -72,8 +73,14 @@ class Strategy:
                 return skill
         return None
 
-    def _all_non_boarding_changing_skills_active(self):
-        for skill in self._non_board_changing_skills:
+    def _get_active_no_damage_skill(self) -> Skill:
+        for skill in self._no_damage_skills:
+            if self._context.game_state.skill_state[skill] == SkillState.OTHERWISE:
+                return skill
+        return None
+
+    def _all_boarding_changing_skills_active(self):
+        for skill in self._board_changing_skills:
             if self._context.game_state.skill_state[skill] == SkillState.INACTIVE:
                 return False
         return True
@@ -87,10 +94,16 @@ class Strategy:
     def _click_non_stun_skills(self) -> Decision:
         return None
 
+    def _wait_stable_and_move_board(self) -> Decision:
+        if not self._context.game_state.board_stabled:
+            return Decision.no_action()
+        return Decision.move_grids(self._get_board_ai_result())
+
     def make_decision(self) -> Decision:
         #return self._make_decision_pvp()
         #return self._make_decision_shaman()
         return self._make_decision_assassin()
+        #return Decision.no_action()
 
     def _make_decision_pvp(self) -> Decision:
         for skill in [Skill.SKILL_1, Skill.SKILL_2, Skill.SKILL_3, Skill.SKILL_4]:
@@ -112,10 +125,6 @@ class Strategy:
             #if self._context.game_state.hp > 0.12:
             if True:
                 return Decision.click_skill(stun_skill)
-
-            if not self._context.game_state.board_stabled:
-                return Decision.no_action()
-            return Decision.move_grids(self._get_board_ai_result())
         
         else:
             if skill := self._get_active_non_board_changing_skill():
@@ -132,13 +141,37 @@ class Strategy:
             
             return Decision.move_grids(self._get_board_ai_result())
 
-
     def _make_decision_assassin(self) -> Decision:
-        if skill := self._get_active_non_board_changing_skill():
-            return Decision.click_skill(skill)
+        stun_skill = self._get_active_stun_skill()
+        if stun_skill is not None:
+            if self._context.game_state.hp < 0.2:
+                # save stun skill to the next enemy
+                if skill := self._get_active_non_board_changing_skill():
+                    return Decision.click_skill(skill)
+                if skill := self._get_active_board_changing_skill():
+                    return Decision.click_skill(skill)
+                return self._wait_stable_and_move_board()
+            else:
+                return Decision.click_skill(stun_skill)
 
-        if self._all_non_boarding_changing_skills_active():
-            skill = self._get_active_board_changing_skill()
+        if self._context.game_state.enemy_status.stunned:
+            # enemy is stunned; try kill by moving grids
+            if self._context.game_state.hp > 0.6:
+                if self._context.game_state.skill_state[Skill.SKILL_ULTIMATE] == SkillState.ULTIMATE_FULL:
+                    return Decision.click_skill(Skill.SKILL_ULTIMATE)
+            if self._context.game_state.hp > 0.3:
+                if skill := self._get_active_non_board_changing_skill():
+                    return Decision.click_skill(skill)
+                if skill := self._get_active_board_changing_skill():
+                    return Decision.click_skill(skill)
+            return self._wait_stable_and_move_board()
+        
+        # no stun skill anymore, and enemy is not stunned.
+        if self._context.game_state.hp > 0.6:
+            if self._context.game_state.skill_state[Skill.SKILL_ULTIMATE] == SkillState.ULTIMATE_FULL:
+                return Decision.click_skill(Skill.SKILL_ULTIMATE)
+
+        if skill := self._get_active_non_board_changing_skill():
             return Decision.click_skill(skill)
 
         if not self._context.game_state.board_stabled:
@@ -150,10 +183,7 @@ class Strategy:
         if skill := self._get_active_board_changing_skill():
             return Decision.click_skill(skill)
 
-        if skill := self._get_active_stun_skill():
-            return Decision.click_skill(skill)
-
-        if self._context.game_state.skill_state[Skill.SKILL_ULTIMATE] == SkillState.OTHERWISE:
+        if self._context.game_state.skill_state[Skill.SKILL_ULTIMATE] != SkillState.INACTIVE:
             return Decision.click_skill(Skill.SKILL_ULTIMATE)
 
         return Decision.move_grids(self._get_board_ai_result())

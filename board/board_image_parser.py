@@ -2,6 +2,7 @@ from typing import Tuple
 import cv2
 import math
 import os
+import time
 import numpy
 from board.grid_types import GridTypes, GridType
 from board.board import Board
@@ -14,6 +15,11 @@ def cv_roi(img, x, y, w, h):
 
 def cv_size(img):
     return tuple(img.shape[1::-1])
+
+def cv_roi_center(img, w, h):
+    x = int((cv_size(img)[0]-w)/2)
+    y = int((cv_size(img)[1]-h)/2)
+    return cv_roi(img, x, y, w, h)
 
 def get_grid_rect(idx_x: int, idx_y: int):
     x1 = 738
@@ -32,12 +38,8 @@ def get_grid_center(x:int, y:int):
     return (x+w/2, y+h/2)
 
 def grid_diff_score(img, seed):
-    seed_effective_w = 80
-    seed_effecgive_h = 80
-
-    seed_x = int((cv_size(seed)[0]-seed_effective_w)/2)
-    seed_y = int((cv_size(seed)[1]-seed_effecgive_h)/2)
-    seed_roi = cv_roi(seed, seed_x, seed_y, seed_effective_w, seed_effecgive_h)
+    seed_roi = cv_roi_center(seed, 80, 80)
+    img = cv_roi_center(img, 90, 90)
 
     res = cv2.matchTemplate(img, seed_roi, cv2.TM_SQDIFF_NORMED)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
@@ -63,10 +65,10 @@ def compare_grid_image(img, grid_types: GridTypes) -> Tuple[GridType, float]:
     return (min_grid_type, min_score)
 
 class HpParser:
-    x1 = 1756
+    x1 = 1752
     y1 = 976
-    x2 = 2100
-    y2 = 1019
+    x2 = 2105
+    y2 = 982
 
     img_full_path = os.path.realpath(os.path.join(os.getcwd(), os.path.dirname(__file__), "hp", "full.png"))
     img_full = None
@@ -98,6 +100,8 @@ class BoardImageParser:
     grid_types = GridTypes()
 
     def parse(self, board_img, report=True) -> Board:
+        start_time = time.time()
+
         ret = Board()
         ret.grid_types = self.grid_types
 
@@ -116,6 +120,8 @@ class BoardImageParser:
                 ret.grids[x_idx, y_idx] = grid_type.value
                 if report:
                     self.__report_grid_parse_result(img_grid, grid_type, score)
+
+        print("BoardImageParser.parse() took {:.2f} seconds".format(time.time()-start_time))
 
         ret.update_locks()
         return ret

@@ -10,21 +10,22 @@ import numpy
 import train_board
 from enum import Enum
 
-def cv_roi(img, x, y, w, h):
-    return img[y:y+h, x:x+w]
+def cv_roi(img, x1,y1,x2,y2):
+    return img[y1:y2, x1:x2]
 
 img_full = cv2.imread("/Users/petershih/Documents/pq3-helper/hp_full.png")
-img_full = cv_roi(img_full, 1756, 976, 2100-1756, 1019-976)
-#cv2.imshow("hp_full", img_full)
+img_full = cv_roi(img_full, 1752, 976, 2105, 982)
+cv2.imshow("hp_full", img_full)
 
-img = cv2.imread("/Users/petershih/Documents/pq3-helper/board_test.png")
-img = cv_roi(img, 1756, 976, 2100-1756, 1019-976)
+img = cv2.imread("/Users/petershih/Documents/pq3-helper/hp_test2.png")
+img = cv_roi(img, 1752, 976, 2105, 982)
 print(img.shape)
-#cv2.imshow("hp bar", img)
+cv2.imshow("hp bar", img)
+
 
 img_diff = cv2.absdiff(img_full, img)
 img_diff = cv2.cvtColor(img_diff, cv2.COLOR_BGR2GRAY)
-#cv2.imshow("hp diff", img_diff)
+cv2.imshow("hp diff", img_diff)
 
 img_mean = numpy.mean(img_diff, axis=0)
 print(img_mean)
@@ -43,6 +44,6 @@ for x in range(img_binary.shape[0]):
 print(max_pos)
 print((img_binary.shape[0]-max_pos) / img_binary.shape[0])
 
-#cv2.waitKey()
-#cv2.destroyAllWindows()
+cv2.waitKey()
+cv2.destroyAllWindows()
 

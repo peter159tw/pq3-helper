@@ -4,3 +4,5 @@ train_tmp/
 ai_tmp/
 ai/ai
 board/grid_types/dataset/
+actions/*/non_match*.png
+actions/*/score_*.png

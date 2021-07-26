@@ -4,6 +4,7 @@ import configparser
 import time
 import numpy
 import glob
+from dataclasses import dataclass
 
 from log.logger import Logger
 
@@ -12,24 +13,64 @@ def cv_size(img):
     return tuple(img.shape[1::-1])
 
 
-def cv_roi(img, x, y, w, h):
-    return img[y:y+h, x:x+w]
+def cv_roi(img, x1, y1, x2, y2):
+    return img[y1:y2, x1:x2]
 
 
+@dataclass
 class ImageFindingSpec:
-    name: str = None
+    name : str
+    expect_pos_x1 : int
+    expect_pos_x2 : int
+    expect_pos_y1 : int
+    expect_pos_y2 : int
+    record_non_match : bool
+    record_all : bool
+    match_any_pattern : str
 
-    expect_pos_x: int = None
-    expect_pos_y: int = None
+    def __init__(self, spec_name: str):
+        config_path = "/Users/petershih/Documents/pq3-helper/actions/{0}/parameters.ini".format(
+            spec_name)
+        config = configparser.ConfigParser()
+        config.read(config_path)
 
-    threshold: float = None
+        config_spec = config["find_spec"]
+        self.name = spec_name
+        self.threshold = ImageFindingSpec._try_float(config_spec.get("threshold"))
 
-    record_non_match: bool = None
-    record_all: bool = None
+        self.expect_pos_x1 = ImageFindingSpec._try_int(config_spec.get("expect_pos_x1"))
+        self.expect_pos_y1 = ImageFindingSpec._try_int(config_spec.get("expect_pos_y1"))
+        self.expect_pos_x2 = ImageFindingSpec._try_int(config_spec.get("expect_pos_x2"))
+        self.expect_pos_y2 = ImageFindingSpec._try_int(config_spec.get("expect_pos_y2"))
 
-    match_any_pattern: str = None
+        if self.expect_pos_x1 is None:
+            self.expect_pos_x1 = ImageFindingSpec._try_int(config_spec.get("expect_pos_x"))
+            self.expect_pos_y1 = ImageFindingSpec._try_int(config_spec.get("expect_pos_y"))
+            self.expect_pos_x2 = self.expect_pos_x1
+            self.expect_pos_y2 = self.expect_pos_y1
+
+        self.record_non_match = ImageFindingSpec._try_int(config_spec.get("record_non_match", 0)) == 1
+        self.record_all = ImageFindingSpec._try_int(config_spec.get("record_all", 0)) == 1
+        self.match_any_pattern = config_spec.get("match_any_pattern", "target.png")
+
+    def _try_float(v) -> float:
+        if v is None:
+            return None
+        return float(v)
 
 
+    def _try_int(v) -> int:
+        if v is None:
+            return None
+        return int(v)
+
+    def _try_bool(v) -> bool:
+        if v is None:
+            return None
+        return bool(v)
+
+
+@dataclass
 class ImageFindResult:
     found: bool = False
 
@@ -39,76 +80,47 @@ class ImageFindResult:
     target_w: int = None
     target_h: int = None
 
-
-def __try_float(v):
-    if v is None:
-        return None
-    return float(v)
-
-
-def __try_int(v):
-    if v is None:
-        return None
-    return int(v)
-
-def __try_bool(v):
-    if v is None:
-        return None
-    return bool(v)
-
-
-def __parse_spec(spec_name: str) -> ImageFindingSpec:
-    config_path = "/Users/petershih/Documents/pq3-helper/actions/{0}/parameters.ini".format(
-        spec_name)
-    config = configparser.ConfigParser()
-    config.read(config_path)
-
-    config_spec = config["find_spec"]
-    ret = ImageFindingSpec()
-    ret.name = spec_name
-    ret.threshold = __try_float(config_spec.get("threshold"))
-    ret.expect_pos_x = __try_int(config_spec.get("expect_pos_x"))
-    ret.expect_pos_y = __try_int(config_spec.get("expect_pos_y"))
-    ret.record_non_match = __try_int(config_spec.get("record_non_match", 0)) == 1
-    ret.record_all = __try_int(config_spec.get("record_all", 0)) == 1
-    ret.match_any_pattern = config_spec.get("match_any_pattern", "target.png")
-    return ret
-
 def __compare_image(screenshot, target, verbose_log, logger: Logger) -> bool:
     target_img = cv2.imread(target)
     res = cv2.matchTemplate(screenshot, target_img, cv2.TM_SQDIFF_NORMED)
+
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
 
     if verbose_log:
         logger.log("Target {}. min_val: {} min_loc: {}".format(target, min_val, min_loc))
     
-    return min_val
+    return (min_val, min_loc)
 
 def find_image(spec_name: str, screenshot, logger: Logger) -> ImageFindResult:
     result = ImageFindResult()
-    spec = __parse_spec(spec_name)
+    spec = ImageFindingSpec(spec_name)
 
     targets = glob.glob("/Users/petershih/Documents/pq3-helper/actions/{}/{}".format(spec_name, spec.match_any_pattern))
     (result.target_w, result.target_h) = cv_size(cv2.imread(targets[0]))
 
-    if spec.expect_pos_x and spec.expect_pos_y:
+    if spec.expect_pos_x1 and spec.expect_pos_y1:
         screenshot_roi = cv_roi(
-            screenshot, spec.expect_pos_x, spec.expect_pos_y, result.target_w, result.target_h)
+            screenshot, spec.expect_pos_x1, spec.expect_pos_y1,
+            spec.expect_pos_x2+result.target_w,
+            spec.expect_pos_y2+result.target_h)
     else:
         screenshot_roi = screenshot
 
+    screenshot_roi = screenshot
+
     matched = False
     score = -1.0
+    loc = None
     for target in targets:
-        score = __compare_image(screenshot_roi, target, spec.expect_pos_x is None, logger)
+        (score, loc) = __compare_image(screenshot_roi, target, spec.expect_pos_x1 is None, logger)
         if score < spec.threshold:
             matched = True
             break
 
-    if spec.expect_pos_x and matched:
+    if spec.expect_pos_x1 and matched:
         result.found = True
-        result.pos_x = spec.expect_pos_x
-        result.pos_y = spec.expect_pos_y
+        result.pos_x = spec.expect_pos_x1 + loc[0]
+        result.pos_y = spec.expect_pos_y1 + loc[1]
         #logger.log("Found spec '{0}'! val: {1} Writing pos: {2},{3}".format(spec_name, min_val, result.pos_x, result.pos_y))
     else:
         result.found = False
@@ -116,7 +128,7 @@ def find_image(spec_name: str, screenshot, logger: Logger) -> ImageFindResult:
 
 
     if spec.record_non_match:
-        record_path = "/Users/petershih/Documents/pq3-helper/actions/{0}/non_match.png".format(spec_name)
+        record_path = "/Users/petershih/Documents/pq3-helper/actions/{}/non_match.png".format(spec_name)
         cv2.imwrite(record_path, screenshot_roi)
 
     if spec.record_all:
@@ -124,10 +136,3 @@ def find_image(spec_name: str, screenshot, logger: Logger) -> ImageFindResult:
         cv2.imwrite(record_path, screenshot_roi)
 
     return result
-
-
-def img_diff_score(img1, img2, x1, y1, x2, y2):
-    img1_roi = cv_roi(img1, x1, y1, x2-x1, y2-y1)
-    img2_roi = cv_roi(img2, x1, y1, x2-x1, y2-y1)
-    diff = cv2.absdiff(img1_roi, img2_roi)
-    return numpy.mean(diff)

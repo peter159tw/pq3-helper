@@ -1,10 +1,11 @@
 from board.board import Board
 from enum import Enum
 from typing import Dict, Set
+from dataclasses import dataclass
 
 
 class MainState(Enum):
-    # next id: 25
+    # next id: 28
 
     UNKNOWN = 1
     CHOOSE_PVP = 2
@@ -19,6 +20,7 @@ class MainState(Enum):
     RETREAT_CONFIRM = 7
     PVP_FIND_OPPONENT = 8
     CHOOSE_ALTAR = 10
+    REST_AND_RECOVER = 25
     DUNGEON_MARKS_CONFIRM = 11
     REVIVE_WINDOW = 14
     QUEST_BATTLE = 15
@@ -30,6 +32,8 @@ class MainState(Enum):
     SIDE_QUEST_COLLECT = 21
     SIDE_QUEST_BEGIN = 22
     DUNGEON_BATTLE = 23
+    CHALLENGE_START_DUNGEON = 26
+    CHALLENGE_START_SKIRMISH = 27
 
 class Skill(Enum):
     SKILL_1 = 0
@@ -57,7 +61,12 @@ class SkillsState(Enum):
 class SkillState(Enum):
     INACTIVE = 1
     OTHERWISE = 2
+    ULTIMATE_FULL = 3
 
+
+@dataclass
+class EnemyStatus:
+    stunned : bool = False
 
 class GameState:
     def __init__(self):
@@ -68,6 +77,7 @@ class GameState:
         self.board : Board = None
         self.board_stabled : bool = False
         self.hp : float = 0.0
+        self.enemy_status : EnemyStatus = EnemyStatus()
 
     def __str__(self):
         o = "game state: {}"
@@ -82,6 +92,8 @@ class GameState:
         o = o + "\nskill_click_count: {}".format(self.skill_click_count)
 
         o = o + "\nHP: {:.3f}".format(self.hp)
+
+        o = o + "\n" + str(self.enemy_status)
 
         if self.board is not None:
             o = o + "\nBoard:\n{}".format(str(self.board))

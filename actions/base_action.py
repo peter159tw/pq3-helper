@@ -34,7 +34,6 @@ class BoardStableChecker():
     def is_stable(self, context):
         context.game_state.board = context.board_image_parse.parse(context.device.last_captured_screenshot)
         self.board_score = context.game_state.board.parse_score
-        print("ActionWaitBoardStable: " + str(self.board_score))
         #if self.board_score < 0.05:
             # board is recognizable. have confidence it's already stable
             #return True

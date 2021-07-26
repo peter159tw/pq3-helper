@@ -113,6 +113,7 @@ class ActionParseGameState(BaseAction):
         oneofs["retreat_confirm"] = lambda: self.__set_game_main_state(context, MainState.RETREAT_CONFIRM)
         oneofs["find_opponent"] = lambda: self.__set_game_main_state(context, MainState.PVP_FIND_OPPONENT)
         oneofs["choose_altar"] = lambda: self.__set_game_main_state(context, MainState.CHOOSE_ALTAR)
+        oneofs["rest_and_recover"] = lambda: self.__set_game_main_state(context, MainState.REST_AND_RECOVER)
         oneofs["dungeon_marks_confirm"] = lambda: self.__set_game_main_state(context, MainState.DUNGEON_MARKS_CONFIRM)
         oneofs["battle_result_chest_full"] = lambda: self.__set_game_main_state(context, MainState.BATTLE_RESULT_CHEST_FULL)
         oneofs["revive_window"] = lambda: self.__set_game_main_state(context, MainState.REVIVE_WINDOW)
@@ -125,6 +126,8 @@ class ActionParseGameState(BaseAction):
         oneofs["side_quest_battle"] = lambda: self.__set_game_main_state(context, MainState.SIDE_QUEST_BATTLE)
         oneofs["side_quest_begin"] = lambda: self.__set_game_main_state(context, MainState.SIDE_QUEST_BEGIN)
         oneofs["side_quest_collect"] = lambda: self.__set_game_main_state(context, MainState.SIDE_QUEST_COLLECT)
+        oneofs["challenge_start_dungeon"] = lambda: self.__set_game_main_state(context, MainState.CHALLENGE_START_DUNGEON)
+        oneofs["challenge_start_skirmish"] = lambda: self.__set_game_main_state(context, MainState.CHALLENGE_START_SKIRMISH)
 
         start_time = time.time()
         self.__find_specs(oneofs.keys(), context)
@@ -159,9 +162,9 @@ class ActionParseGameState(BaseAction):
             "skill_2_inactive": Skill.SKILL_2,
             "skill_3_inactive": Skill.SKILL_3,
             "skill_4_inactive": Skill.SKILL_4,
-            "ultimate_skill_inactive": Skill.SKILL_ULTIMATE,
         }
         specs = ["all_skills_inactive"] + list(skill_map.keys())
+        specs = specs + ["ultimate_skill_inactive", "ultimate_skill_full"]
 
         self.__find_specs(specs, context)
         if context.image_find_results["all_skills_inactive"].found:
@@ -175,6 +178,16 @@ class ActionParseGameState(BaseAction):
             else:
                 context.game_state.skill_state[skill] = SkillState.OTHERWISE
 
+        if context.image_find_results["ultimate_skill_full"].found:
+            context.game_state.skill_state[Skill.SKILL_ULTIMATE] = SkillState.ULTIMATE_FULL
+        elif context.image_find_results["ultimate_skill_inactive"].found:
+            context.game_state.skill_state[Skill.SKILL_ULTIMATE] = SkillState.INACTIVE
+        else:
+            context.game_state.skill_state[Skill.SKILL_ULTIMATE] = SkillState.OTHERWISE
+
+        self.__find_specs(["enemy_status_stunned"], context)
+        context.game_state.enemy_status.stunned = context.image_find_results["enemy_status_stunned"].found
+
         yield from ()
 
     def __parse_battle_result(self, context: ActionRunningContext) -> Iterable[BaseAction]:
@@ -186,6 +199,7 @@ class ActionParseGameState(BaseAction):
             context.game_state.main_state = MainState.BATTLE_RESULT_CHEST_ACTION
         else:
             context.game_state.main_state = MainState.BATTLE_RESULT
+
         yield from ()
 
     def __find_specs(self, specs, context: ActionRunningContext):
@@ -265,6 +279,10 @@ class ActionOpenPvp(BaseAction):
             yield from self.__generate_action_to_click_center_target(context, "choose_altar")
             time.sleep(0.5)
 
+        if context.game_state.main_state == MainState.REST_AND_RECOVER:
+            yield ActionClickPosition(1165, 862)
+            time.sleep(0.5)
+
         if context.game_state.main_state == MainState.DUNGEON_MARKS_CONFIRM:
             yield from self.__generate_action_to_click_center_target(context, "dungeon_marks_confirm")
             time.sleep(0.5)
@@ -303,6 +321,14 @@ class ActionOpenPvp(BaseAction):
 
         if context.game_state.main_state == MainState.DUNGEON_BATTLE:
             yield ActionClickPosition(1865, 1011)
+            time.sleep(0.5)
+
+        if context.game_state.main_state == MainState.CHALLENGE_START_DUNGEON:
+            yield ActionClickPosition(1162,968)
+            time.sleep(0.5)
+
+        if context.game_state.main_state == MainState.CHALLENGE_START_SKIRMISH:
+            yield ActionClickPosition(1162,968)
             time.sleep(0.5)
 
     def __decide_in_battle(self, context: ActionRunningContext):
